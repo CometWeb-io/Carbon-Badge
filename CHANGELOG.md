@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.0.7] — 2026-09-09
+
+### Fixed
+- **Honest grade bands** — display letter is always derived from `co2ToScore` (A+ &lt;0.10 … A &lt;0.20 …) so a divergent API/cached letter cannot show e.g. **A @ 0.29g**.
+- **Verified footer** — shows **Verified by CometWeb** only when API `verified:true`; otherwise **Powered by CometWeb**.
+- **Accessibility** — light-theme highlight contrast (AA), focus-visible rings, host `tabindex=-1` (no double tab stop), larger Retry hit target, stronger loading/footer contrast, `prefers-reduced-motion` transitions narrowed.
+- **429 retries** — pass `loadId` through backoff and keep loading aria feedback.
+
+### Changed
+- Docs/CDN pins and `repository.url` → `MaciejZet/CometWeb-Carbon_Badge` (was wrong org path).
+
+---
+
+## [1.0.6] — 2026-04-10
+
+### Changed
+- Version bump / lockfile sync for npm publish.
+
+---
+
 ## [1.0.5] — 2026-03-23
 
 ### Fixed

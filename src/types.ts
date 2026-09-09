@@ -9,6 +9,8 @@ export interface BadgeData {
     cleanerThan: number;
     pageWeightKb: number;
     greenHost: boolean;
+    /** True only when embed origin matches the measured URL (API verification). */
+    verified: boolean;
     timestamp: number;
 }
 
@@ -32,6 +34,9 @@ export interface APIResponse {
     green_host: boolean;
     eco_badge_eligible?: boolean;
     eco_badge_threshold_grams?: number;
+    /** Present on public badge API when origin/referer was checked. */
+    verified?: boolean;
+    verification_reason?: string;
     cached: boolean;
     ttl: number;
 }

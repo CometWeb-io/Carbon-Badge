@@ -5,7 +5,7 @@
  * Powered by CometWeb & SWDM v4.
  * 
  * Usage:
- *   <script src="https://cdn.jsdelivr.net/npm/@cometweb/carbon-badge"></script>
+ *   <script src="https://unpkg.com/@cometweb/carbon-badge@1.0.7/dist/cometweb-carbon-badge.esm.js"></script>
  *   <cometweb-carbon-badge url="https://example.com"></cometweb-carbon-badge>
  * 
  * Or via npm:

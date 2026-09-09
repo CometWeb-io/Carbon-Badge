@@ -139,12 +139,17 @@ describe('race condition guard (_loadId)', () => {
 // --- API score validation: unknown score → 'F' ---
 
 describe('API response validation', () => {
-    it('falls back to F for an unknown score from the API', async () => {
+    it('derives letter from CO₂ bands when API score disagrees (Honest Operator)', async () => {
+        // API historically returned Insight grades (A < 0.30); public badge docs use A < 0.20
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
             ok: true,
             status: 200,
             headers: { get: () => null },
-            json: () => Promise.resolve(makeApiResponse({ score: 'Z' })),
+            json: () => Promise.resolve(makeApiResponse({
+                score: 'A',
+                co2_grams: 0.2872,
+                verified: false,
+            })),
         }));
 
         const el = document.createElement(TAG) as any;
@@ -156,7 +161,34 @@ describe('API response validation', () => {
             document.body.appendChild(el);
         });
 
-        expect(el.score).toBe('F');
+        expect(el.score).toBe('B');
+        expect(el.shadowRoot?.innerHTML).toContain('Powered by CometWeb');
+        expect(el.shadowRoot?.innerHTML).not.toContain('Verified by CometWeb');
+    });
+
+    it('shows Verified footer only when API verified=true', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: () => Promise.resolve(makeApiResponse({
+                score: 'A',
+                co2_grams: 0.15,
+                verified: true,
+            })),
+        }));
+
+        const el = document.createElement(TAG) as any;
+        el.setAttribute('url', 'https://example.com');
+        el.setAttribute('mode', 'api');
+
+        await new Promise<void>(resolve => {
+            el.addEventListener('cometweb:badge-load', () => resolve());
+            document.body.appendChild(el);
+        });
+
+        expect(el.score).toBe('A');
+        expect(el.shadowRoot?.innerHTML).toContain('Verified by CometWeb');
     });
 });
 

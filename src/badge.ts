@@ -14,7 +14,6 @@ const DEFAULT_API_URL = 'https://app.cometweb.io/api';
 const DEFAULT_CACHE_TTL = 720; // 12 hours in minutes
 const MAX_RETRIES = 3;
 const API_TIMEOUT_MS = 5000;
-const ALLOWED_SCORES: ScoreLetter[] = ['A+', 'A', 'B', 'C', 'D', 'F'];
 const LOG_PREFIX = '[CometWeb Carbon Badge]';
 const SCORE_CLASS_MAP: Record<string, string> = {
     'A+': 'grade-aplus', 'A': 'grade-a', 'B': 'grade-b',
@@ -71,8 +70,8 @@ export class CometWebCarbonBadge extends HTMLElement {
         super();
         this.shadow = this.attachShadow({ mode: 'open' });
         this.shadow.adoptedStyleSheets = [getStyleSheet(this.theme)];
-        // tabindex makes the host focusable so this.focus() works on retry
-        if (!this.hasAttribute('tabindex')) this.setAttribute('tabindex', '0');
+        // Programmatic focus only (retry) — avoid a second tab stop beside the inner <a>/<button>
+        if (!this.hasAttribute('tabindex')) this.setAttribute('tabindex', '-1');
     }
 
     // --- Attribute helpers ---
@@ -137,7 +136,11 @@ export class CometWebCarbonBadge extends HTMLElement {
             const cached = getCached(url);
             if (cached) {
                 if (loadId !== this._loadId) return;
-                this.data = cached;
+                this.data = {
+                    ...cached,
+                    score: co2ToScore(Math.max(0, toFiniteNumber(cached.co2Grams, 0))),
+                    verified: cached.verified === true,
+                };
                 this.dataSource = 'cache';
                 this.renderBadge();
                 return;
@@ -194,12 +197,13 @@ export class CometWebCarbonBadge extends HTMLElement {
 
                 if (this.retryCount < MAX_RETRIES) {
                     this.retryCount++;
-                    setTimeout(() => this.fetchFromAPI(url), delay);
+                    this.renderLoading('Retrying after rate limit…');
+                    setTimeout(() => this.fetchFromAPI(url, loadId), delay);
                     return;
                 }
 
                 console.warn(LOG_PREFIX, 'API rate limited, falling back to estimate mode.');
-                this.runEstimate();
+                this.runEstimate(loadId);
                 return;
             }
 
@@ -210,17 +214,18 @@ export class CometWebCarbonBadge extends HTMLElement {
             const apiData: APIResponse = await response.json();
             if (loadId !== this._loadId) return;
 
-            const score = ALLOWED_SCORES.includes(apiData.score as ScoreLetter)
-                ? (apiData.score as ScoreLetter)
-                : 'F';
+            const co2Grams = Math.max(0, toFiniteNumber(apiData.co2_grams, 0));
+            // Letter bands are SoT in co2ToScore / README — do not trust a divergent API letter.
+            const score = co2ToScore(co2Grams);
 
             this.data = {
                 url: apiData.url,
-                co2Grams: Math.max(0, toFiniteNumber(apiData.co2_grams, 0)),
+                co2Grams,
                 score,
                 cleanerThan: clamp(toFiniteNumber(apiData.cleaner_than, 0), 0, 100),
                 pageWeightKb: Math.max(0, toFiniteNumber(apiData.page_weight_kb, 0)),
                 greenHost: apiData.green_host,
+                verified: apiData.verified === true,
                 timestamp: Date.now(),
             };
             this.dataSource = 'api';
@@ -229,6 +234,7 @@ export class CometWebCarbonBadge extends HTMLElement {
             this.retryCount = 0;
             this.renderBadge();
         } catch (error) {
+            if (loadId !== this._loadId) return;
             const isAbort = error instanceof DOMException && error.name === 'AbortError';
             if (isAbort) {
                 console.warn(LOG_PREFIX, 'API request timed out, falling back to estimate mode.');
@@ -236,7 +242,7 @@ export class CometWebCarbonBadge extends HTMLElement {
 
             if (this.retryCount < MAX_RETRIES) {
                 this.retryCount++;
-                this.runEstimate();
+                this.runEstimate(loadId);
             } else {
                 this.renderError();
             }
@@ -268,10 +274,11 @@ export class CometWebCarbonBadge extends HTMLElement {
         this.shadow.adoptedStyleSheets = [getStyleSheet(this.theme)];
     }
 
-    private renderLoading() {
+    private renderLoading(label = 'Calculating carbon footprint\u2026') {
         this.updateStyles();
+        const safeLabel = escapeHtml(label);
         this.shadow.innerHTML = `
-      <div role="status" aria-live="polite" aria-label="Calculating carbon footprint\u2026">
+      <div role="status" aria-live="polite" aria-label="${safeLabel}">
         <div class="cw-badge loading">
           <div class="cw-grade grade-unknown" aria-hidden="true">\u2026</div>
           <div class="cw-content">
@@ -287,12 +294,16 @@ export class CometWebCarbonBadge extends HTMLElement {
         if (!this.data) return;
 
         const co2Grams = Math.max(0, toFiniteNumber(this.data.co2Grams, 0));
-        const score = ALLOWED_SCORES.includes(this.data.score) ? this.data.score : 'F';
+        // Reconcile letter to published bands even for cached payloads.
+        const score = co2ToScore(co2Grams);
+        this.data.score = score;
         const cleanerThan = clamp(toFiniteNumber(this.data.cleanerThan, 0), 0, 100);
         const scoreClass = SCORE_CLASS_MAP[score] || 'grade-unknown';
         const co2Display = co2Grams < 0.01 ? '&lt;0.01' : escapeHtml(co2Grams.toFixed(2));
         const safeScore = escapeHtml(score);
         const safeCleanerThan = escapeHtml(cleanerThan.toString());
+        const isVerified = this.data.verified === true;
+        const footerLabel = isVerified ? 'Verified by CometWeb' : 'Powered by CometWeb';
         const aria = `Carbon footprint: ${co2Grams.toFixed(2)}g CO\u2082e per visit, score ${score}`;
         const safeAria = escapeHtml(aria);
 
@@ -311,7 +322,7 @@ export class CometWebCarbonBadge extends HTMLElement {
               Cleaner than <span class="cw-highlight">${safeCleanerThan}%</span> of web
             </div>
           </div>
-          <div class="cw-footer" aria-hidden="true">Verified by CometWeb</div>
+          <div class="cw-footer" aria-hidden="true">${footerLabel}</div>
         </a>
       </div>
     `;
@@ -327,10 +338,10 @@ export class CometWebCarbonBadge extends HTMLElement {
           <div class="cw-content">
             <div class="cw-title">Unable to calculate</div>
             <div class="cw-error-actions">
-              <button type="button" class="cw-retry-btn">Retry</button>
+              <button type="button" class="cw-retry-btn" aria-label="Retry carbon measurement">Retry</button>
             </div>
           </div>
-          <div class="cw-footer" aria-hidden="true">Verified by CometWeb</div>
+          <div class="cw-footer" aria-hidden="true">Powered by CometWeb</div>
         </div>
       </div>
     `;

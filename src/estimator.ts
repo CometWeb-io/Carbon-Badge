@@ -44,6 +44,8 @@ export function estimateCO2(greenHost: boolean = false): BadgeData {
         cleanerThan: Math.round(cleanerThan * 10) / 10,
         pageWeightKb: Math.round(pageWeightKb),
         greenHost,
+        // Client estimate is never origin-verified against CometWeb scan ownership.
+        verified: false,
         timestamp: Date.now(),
     };
 }
