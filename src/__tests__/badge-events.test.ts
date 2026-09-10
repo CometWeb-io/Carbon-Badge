@@ -1,11 +1,10 @@
 /**
- * Tests for CometWebCarbonBadge custom events and race condition guard.
+ * Tests for CometWebCarbonBadge — fail-closed honesty + lifecycle.
  *
- * Uses happy-dom (bundled with Vitest) for a lightweight DOM environment.
  * @vitest-environment happy-dom
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import '../index'; // registers the custom element
+import '../index';
 
 const TAG = 'cometweb-carbon-badge';
 
@@ -23,9 +22,11 @@ function makeApiResponse(overrides: Record<string, unknown> = {}) {
     };
 }
 
-// Block all real network calls — each test overrides per-need
 beforeAll(() => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('fetch not mocked in this test')));
+    vi.stubGlobal(
+        'fetch',
+        vi.fn().mockRejectedValue(new Error('fetch not mocked in this test')),
+    );
 });
 
 beforeEach(() => {
@@ -38,24 +39,27 @@ afterEach(() => {
     vi.unstubAllGlobals();
     document.body.innerHTML = '';
     localStorage.clear();
-    // Re-apply the global fetch block after unstubAllGlobals
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('fetch not mocked in this test')));
+    vi.stubGlobal(
+        'fetch',
+        vi.fn().mockRejectedValue(new Error('fetch not mocked in this test')),
+    );
 });
-
-// --- cometweb:badge-load dispatched after DOM is updated ---
 
 describe('cometweb:badge-load event', () => {
     it('is dispatched after shadow DOM is updated with badge data', async () => {
         const apiData = makeApiResponse();
 
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-            ok: true,
-            status: 200,
-            headers: { get: () => null },
-            json: () => Promise.resolve(apiData),
-        }));
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: { get: () => null },
+                json: () => Promise.resolve(apiData),
+            }),
+        );
 
-        const el = document.createElement(TAG) as HTMLElement & { score: string | null };
+        const el = document.createElement(TAG) as HTMLElement;
         el.setAttribute('url', 'https://example.com');
         el.setAttribute('mode', 'api');
 
@@ -70,38 +74,114 @@ describe('cometweb:badge-load event', () => {
         document.body.appendChild(el);
         await vi.waitFor(() => expect(eventFired).toBe(true), { timeout: 2000 });
 
-        // Shadow DOM must already contain the score when the event fires
         expect(shadowHtmlAtEventTime).toContain('B');
         expect(shadowHtmlAtEventTime).toContain('0.23');
     });
 
     it('exposes correct score via public getter after load', async () => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-            ok: true,
-            status: 200,
-            headers: { get: () => null },
-            json: () => Promise.resolve(makeApiResponse({ url: 'https://example.com/a', score: 'A', co2_grams: 0.15 })),
-        }));
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: { get: () => null },
+                json: () =>
+                    Promise.resolve(
+                        makeApiResponse({
+                            url: 'https://example.com/a',
+                            score: 'A',
+                            co2_grams: 0.15,
+                        }),
+                    ),
+            }),
+        );
 
         const el = document.createElement(TAG) as any;
         el.setAttribute('url', 'https://example.com/a');
         el.setAttribute('mode', 'api');
 
-        await new Promise<void>(resolve => {
+        await new Promise<void>((resolve) => {
             el.addEventListener('cometweb:badge-load', () => resolve());
             document.body.appendChild(el);
         });
 
         expect(el.score).toBe('A');
         expect(el.co2Grams).toBe(0.15);
+        expect(el.badgeData).not.toBe(el.badgeData); // copy each get
+        expect(el.badgeData.co2Grams).toBe(0.15);
     });
 });
 
-// --- cometweb:badge-error dispatched on failure ---
+describe('CB-01 fail-closed empty CO₂', () => {
+    it('shows N/D for empty API body — never A+', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: { get: () => null },
+                json: () => Promise.resolve({}),
+            }),
+        );
+
+        const el = document.createElement(TAG) as any;
+        el.setAttribute('url', 'https://example.com');
+        el.setAttribute('mode', 'api');
+
+        let errorFired = false;
+        el.addEventListener('cometweb:badge-error', () => {
+            errorFired = true;
+        });
+
+        document.body.appendChild(el);
+        await vi.waitFor(() => expect(errorFired).toBe(true), { timeout: 2000 });
+
+        expect(el.score).toBeNull();
+        expect(el.co2Grams).toBeNull();
+        expect(el.shadowRoot?.innerHTML).toContain('N/D');
+        expect(el.shadowRoot?.innerHTML).not.toContain('A+');
+    });
+});
+
+describe('CB-04 no host estimate fallback on API failure', () => {
+    it('shows N/D instead of estimating the host page', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockRejectedValue(new Error('network down')),
+        );
+
+        const el = document.createElement(TAG) as any;
+        el.setAttribute('url', 'https://remote.example.com');
+        el.setAttribute('mode', 'api');
+
+        let errorFired = false;
+        el.addEventListener('cometweb:badge-error', () => {
+            errorFired = true;
+        });
+
+        document.body.appendChild(el);
+        await vi.waitFor(() => expect(errorFired).toBe(true), { timeout: 3000 });
+
+        expect(el.score).toBeNull();
+        expect(el.shadowRoot?.innerHTML).toContain('N/D');
+    });
+});
+
+describe('CB-02 tabindex only after connect', () => {
+    it('createElement after define yields a real custom element without constructor tabindex race', () => {
+        const el = document.createElement(TAG) as HTMLElement;
+        expect(el instanceof HTMLElement).toBe(true);
+        expect(el.tagName.toLowerCase()).toBe(TAG);
+        // tabindex applied in connectedCallback, not constructor
+        expect(el.hasAttribute('tabindex')).toBe(false);
+        document.body.appendChild(el);
+        expect(el.getAttribute('tabindex')).toBe('-1');
+        expect(el.shadowRoot).toBeTruthy();
+    });
+});
 
 describe('cometweb:badge-error event', () => {
     it('is dispatched when url resolves to empty string', async () => {
-        // Stub location.href to '' so targetUrl fallback also gives ''
         vi.stubGlobal('location', { href: '' });
         const el = document.createElement(TAG) as HTMLElement;
         el.setAttribute('url', '');
@@ -113,19 +193,19 @@ describe('cometweb:badge-error event', () => {
         });
 
         document.body.appendChild(el);
-        await vi.waitFor(() => expect(errorDetail).not.toBeNull(), { timeout: 1000 });
+        await vi.waitFor(() => expect(errorDetail).not.toBeNull(), {
+            timeout: 1000,
+        });
 
         expect(errorDetail).toBeDefined();
     });
 });
 
-// --- race condition: stale fetch result discarded ---
-
 describe('race condition guard (_loadId)', () => {
-    it('_loadId increments on each loadData call', () => {
+    it('_loadId increments on each reload', () => {
         const el = document.createElement(TAG) as any;
         el.setAttribute('url', 'https://example.com');
-        el.setAttribute('mode', 'estimate');
+        el.setAttribute('mode', 'api');
 
         const idBefore = el._loadId;
         el.reload();
@@ -136,27 +216,30 @@ describe('race condition guard (_loadId)', () => {
     });
 });
 
-// --- API score validation: unknown score → 'F' ---
-
 describe('API response validation', () => {
-    it('derives letter from CO₂ bands when API score disagrees (Honest Operator)', async () => {
-        // API historically returned Insight grades (A < 0.30); public badge docs use A < 0.20
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-            ok: true,
-            status: 200,
-            headers: { get: () => null },
-            json: () => Promise.resolve(makeApiResponse({
-                score: 'A',
-                co2_grams: 0.2872,
-                verified: false,
-            })),
-        }));
+    it('derives letter from CO₂ bands when API score disagrees', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: { get: () => null },
+                json: () =>
+                    Promise.resolve(
+                        makeApiResponse({
+                            score: 'A',
+                            co2_grams: 0.2872,
+                            verified: false,
+                        }),
+                    ),
+            }),
+        );
 
         const el = document.createElement(TAG) as any;
         el.setAttribute('url', 'https://example.com');
         el.setAttribute('mode', 'api');
 
-        await new Promise<void>(resolve => {
+        await new Promise<void>((resolve) => {
             el.addEventListener('cometweb:badge-load', () => resolve());
             document.body.appendChild(el);
         });
@@ -167,22 +250,28 @@ describe('API response validation', () => {
     });
 
     it('shows Verified footer only when API verified=true', async () => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-            ok: true,
-            status: 200,
-            headers: { get: () => null },
-            json: () => Promise.resolve(makeApiResponse({
-                score: 'A',
-                co2_grams: 0.15,
-                verified: true,
-            })),
-        }));
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: { get: () => null },
+                json: () =>
+                    Promise.resolve(
+                        makeApiResponse({
+                            score: 'A',
+                            co2_grams: 0.15,
+                            verified: true,
+                        }),
+                    ),
+            }),
+        );
 
         const el = document.createElement(TAG) as any;
         el.setAttribute('url', 'https://example.com');
         el.setAttribute('mode', 'api');
 
-        await new Promise<void>(resolve => {
+        await new Promise<void>((resolve) => {
             el.addEventListener('cometweb:badge-load', () => resolve());
             document.body.appendChild(el);
         });
@@ -190,28 +279,70 @@ describe('API response validation', () => {
         expect(el.score).toBe('A');
         expect(el.shadowRoot?.innerHTML).toContain('Verified by CometWeb');
     });
+
+    it('omits % of web when cleaner_than is absent (CB-07)', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: { get: () => null },
+                json: () =>
+                    Promise.resolve({
+                        url: 'https://example.com',
+                        co2_grams: 0.2,
+                        page_weight_kb: 100,
+                        green_host: false,
+                    }),
+            }),
+        );
+
+        const el = document.createElement(TAG) as any;
+        el.setAttribute('url', 'https://example.com');
+        el.setAttribute('mode', 'api');
+
+        await new Promise<void>((resolve) => {
+            el.addEventListener('cometweb:badge-load', () => resolve());
+            document.body.appendChild(el);
+        });
+
+        expect(el.cleanerThan).toBeNull();
+        expect(el.shadowRoot?.innerHTML).not.toContain('%');
+        expect(el.shadowRoot?.innerHTML).toContain('Estimated page-load footprint');
+    });
 });
 
-// --- estimate mode ---
-
 describe('estimate mode', () => {
-    it('populates score in estimate mode without API call', async () => {
+    it('populates score for current page without API call', async () => {
         vi.stubGlobal('performance', {
-            getEntriesByType: (t: string) => t === 'navigation'
-                ? [{ transferSize: 200 * 1024, encodedBodySize: 200 * 1024 }]
-                : [],
+            getEntriesByType: (t: string) =>
+                t === 'navigation'
+                    ? [{ transferSize: 200 * 1024, encodedBodySize: 200 * 1024 }]
+                    : [],
             now: () => Date.now(),
         });
 
         const el = document.createElement(TAG) as any;
         el.setAttribute('mode', 'estimate');
-        el.setAttribute('url', 'https://example.com/estimate');
+        // No remote url — estimate measures location
         document.body.appendChild(el);
 
-        // score is null while loading; waitFor polls until estimate completes
         await vi.waitFor(
             () => expect(el.score).toMatch(/^(A\+|A|B|C|D|F)$/),
             { timeout: 2000 },
         );
+        expect(el.cleanerThan).toBeNull();
+        expect(el.shadowRoot?.innerHTML).not.toContain('of web');
+    });
+});
+
+describe('CB-11 disconnect aborts', () => {
+    it('disconnectedCallback increments load id and does not throw', () => {
+        const el = document.createElement(TAG) as any;
+        el.setAttribute('url', 'https://example.com');
+        document.body.appendChild(el);
+        const id = el._loadId;
+        document.body.removeChild(el);
+        expect(el._loadId).toBeGreaterThan(id);
     });
 });

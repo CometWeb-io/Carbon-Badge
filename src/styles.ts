@@ -14,6 +14,8 @@ export function getStyleSheet(theme: BadgeTheme): CSSStyleSheet {
 const BASE_STYLES = `
   :host {
     display: inline-block;
+    width: 100%;
+    max-width: 320px;
     --cw-text-light: #FFFFFF;
     --cw-accent: #05F29B;
     --cw-action: #04C27C;
@@ -26,8 +28,8 @@ const BASE_STYLES = `
   .cw-badge {
     display: flex;
     align-items: center;
-    width: 320px;
-    max-width: 100%;
+    width: 100%;
+    max-width: 320px;
     padding: 16px 16px 20px;
     border-radius: 14px;
     text-decoration: none;

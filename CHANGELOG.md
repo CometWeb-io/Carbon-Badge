@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.0.8] — 2026-09-10
+
+### Fixed
+- **CB-01** — missing / non-finite `co2_grams` → **N/D** (never A+ from `0` fallback).
+- **CB-02** — `tabindex` only in `connectedCallback` (safe `createElement` after `define`).
+- **CB-04** — API failure never falls back to host-page estimate for a remote `url`.
+- **CB-05** — cache key `cwb:v2:{url}|{mode}|{apiHash}|{green}|schema`; `reload({force:true})`.
+- **CB-07** — no “% of web” without a real benchmark; local estimate keeps `cleanerThan: null`.
+- **CB-11** — debounced init, `disconnectedCallback` + abort, single-flight loads.
+- **CB-14** — URL canonicalize strips `#fragment` and tracking/auth query params.
+
+### Added
+- `registerCarbonBadge()`, `parseApiResponse` / `canonicalizeBadgeUrl`, measurement `status` / `formulaId` fields.
+- Host `width:100%; max-width:320px` (CB-15).
+
+### Changed
+- Evidence link defaults to `https://cometweb.io/carbon-badge` (not Ecology marketing alone).
+
+---
+
 ## [1.0.7] — 2026-09-09
 
 ### Fixed

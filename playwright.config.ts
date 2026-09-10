@@ -1,0 +1,20 @@
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  testDir: 'e2e',
+  timeout: 30_000,
+  fullyParallel: false,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  use: {
+    headless: true,
+    baseURL: 'http://127.0.0.1:4177',
+    viewport: { width: 1280, height: 720 },
+  },
+  webServer: {
+    command: 'npx --yes serve . -l 4177 --cors',
+    port: 4177,
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+  },
+});

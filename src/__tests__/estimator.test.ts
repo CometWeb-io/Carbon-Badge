@@ -18,10 +18,11 @@ describe('estimateCO2', () => {
             url: expect.any(String),
             co2Grams: expect.any(Number),
             score: expect.stringMatching(/^(A\+|A|B|C|D|F)$/),
-            cleanerThan: expect.any(Number),
+            cleanerThan: null,
             pageWeightKb: expect.any(Number),
             greenHost: false,
             timestamp: expect.any(Number),
+            formulaId: 'swdm-v4-lite',
         });
     });
 
@@ -30,10 +31,10 @@ describe('estimateCO2', () => {
         expect(result.co2Grams).toBeGreaterThanOrEqual(0);
     });
 
-    it('cleanerThan is within [1, 99]', () => {
+    it('does not invent a web percentile (cleanerThan is null)', () => {
         const result = estimateCO2(false);
-        expect(result.cleanerThan).toBeGreaterThanOrEqual(1);
-        expect(result.cleanerThan).toBeLessThanOrEqual(99);
+        expect(result.cleanerThan).toBeNull();
+        expect(result.formulaId).toBe('swdm-v4-lite');
     });
 
     it('greenHost=true produces lower CO₂ than greenHost=false', () => {

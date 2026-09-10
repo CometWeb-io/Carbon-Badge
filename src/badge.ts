@@ -3,31 +3,50 @@
  *
  * Attributes: url, mode ("api"|"estimate"), theme ("dark"|"light"),
  *   cache-ttl, api-url, api-key, green-host
+ *
+ * Honest Operator: missing CO₂ → N/D (never A+ from 0); remote URL never
+ * falls back to host-page estimate; cache keys include mode/api/green/schema.
  */
 
-import type { BadgeData, BadgeTheme, BadgeMode, ScoreLetter, APIResponse } from './types';
-import { getCached, isCacheValid, setCache, clearExpired } from './cache';
-import { estimateCO2, co2ToScore } from './estimator';
+import type {
+    BadgeData,
+    BadgeTheme,
+    BadgeMode,
+    ScoreLetter,
+    APIResponse,
+} from './types';
+import {
+    getCached,
+    isCacheValid,
+    setCache,
+    clearExpired,
+    buildCacheKey,
+} from './cache';
+import { estimateCO2Detailed, co2ToScore } from './estimator';
 import { getStyleSheet } from './styles';
+import {
+    canonicalizeBadgeUrl,
+    parseApiResponse,
+    normalizeBadgeData,
+    cloneBadgeData,
+    clamp,
+} from './normalize';
 
 const DEFAULT_API_URL = 'https://app.cometweb.io/api';
 const DEFAULT_CACHE_TTL = 720; // 12 hours in minutes
 const MAX_RETRIES = 3;
-const API_TIMEOUT_MS = 5000;
+const API_TIMEOUT_MS = 8000;
 const LOG_PREFIX = '[CometWeb Carbon Badge]';
+const DEFAULT_EVIDENCE_URL = 'https://cometweb.io/carbon-badge';
 const SCORE_CLASS_MAP: Record<string, string> = {
-    'A+': 'grade-aplus', 'A': 'grade-a', 'B': 'grade-b',
-    'C': 'grade-c', 'D': 'grade-d', 'F': 'grade-f',
+    'A+': 'grade-aplus',
+    A: 'grade-a',
+    B: 'grade-b',
+    C: 'grade-c',
+    D: 'grade-d',
+    F: 'grade-f',
 };
-
-function toFiniteNumber(value: unknown, fallback: number): number {
-    const n = typeof value === 'number' ? value : Number(value);
-    return Number.isFinite(n) ? n : fallback;
-}
-
-function clamp(value: number, min: number, max: number): number {
-    return Math.min(max, Math.max(min, value));
-}
+const ALLOWED_THEMES = new Set<BadgeTheme>(['dark', 'light']);
 
 function escapeHtml(value: string): string {
     return value
@@ -38,60 +57,109 @@ function escapeHtml(value: string): string {
         .replace(/'/g, '&#39;');
 }
 
+function currentPageUrl(): string {
+    try {
+        return typeof location !== 'undefined' ? location.href : '';
+    } catch {
+        return '';
+    }
+}
+
+function samePageAsLocation(canonical: string): boolean {
+    const page = canonicalizeBadgeUrl(currentPageUrl());
+    return Boolean(page && page === canonical);
+}
 
 export class CometWebCarbonBadge extends HTMLElement {
     private shadow: ShadowRoot;
     private data: BadgeData | null = null;
     private retryCount = 0;
-    private dataSource: 'cache' | 'api' | 'estimate' = 'api';
+    private dataSource: BadgeData['source'] = 'api';
     private _loadId = 0;
+    private _abort: AbortController | null = null;
+    private _scheduleTimer: ReturnType<typeof setTimeout> | null = null;
+    private _estimateTimer: ReturnType<typeof setTimeout> | null = null;
+    private _inFlight = false;
+    private _forceNext = false;
 
-    // --- Public API ---
+    // --- Public API (getters return copies — CB-06) ---
 
-    get badgeData(): BadgeData | null { return this.data; }
-    get co2Grams(): number | null { return this.data?.co2Grams ?? null; }
-    get score(): ScoreLetter | null { return this.data?.score ?? null; }
-    get cleanerThan(): number | null { return this.data?.cleanerThan ?? null; }
-    get pageWeightKb(): number | null { return this.data?.pageWeightKb ?? null; }
+    get badgeData(): BadgeData | null {
+        return this.data ? cloneBadgeData(this.data) : null;
+    }
+    get co2Grams(): number | null {
+        return this.data?.co2Grams ?? null;
+    }
+    get score(): ScoreLetter | null {
+        return this.data?.score ?? null;
+    }
+    get cleanerThan(): number | null {
+        return this.data?.cleanerThan ?? null;
+    }
+    get pageWeightKb(): number | null {
+        return this.data?.pageWeightKb ?? null;
+    }
+    get measurementStatus(): BadgeData['status'] | null {
+        return this.data?.status ?? null;
+    }
 
-    reload(): void {
+    reload(options?: { force?: boolean }): void {
         this.retryCount = 0;
         this.data = null;
+        this._forceNext = options?.force === true;
         this._loadId++;
+        this.abortInFlight();
         this.renderLoading();
-        this.loadData();
+        this.scheduleLoad();
     }
 
     static get observedAttributes() {
-        return ['url', 'mode', 'theme', 'cache-ttl', 'api-url', 'api-key', 'green-host'];
+        return [
+            'url',
+            'mode',
+            'theme',
+            'cache-ttl',
+            'api-url',
+            'api-key',
+            'green-host',
+        ];
     }
 
     constructor() {
         super();
         this.shadow = this.attachShadow({ mode: 'open' });
-        this.shadow.adoptedStyleSheets = [getStyleSheet(this.theme)];
-        // Programmatic focus only (retry) — avoid a second tab stop beside the inner <a>/<button>
-        if (!this.hasAttribute('tabindex')) this.setAttribute('tabindex', '-1');
+        // Do NOT set tabindex in constructor — breaks createElement after define (CB-02).
+        try {
+            this.shadow.adoptedStyleSheets = [getStyleSheet(this.theme)];
+        } catch {
+            /* SSR / no Constructable Stylesheets */
+        }
     }
 
     // --- Attribute helpers ---
 
-    private get targetUrl(): string {
-        return this.getAttribute('url') || (typeof location !== 'undefined' ? location.href : '');
+    private get rawTargetUrl(): string {
+        return this.getAttribute('url') || currentPageUrl();
+    }
+
+    private get canonicalTargetUrl(): string | null {
+        return canonicalizeBadgeUrl(this.rawTargetUrl);
     }
 
     private get mode(): BadgeMode {
-        return (this.getAttribute('mode') as BadgeMode) || 'api';
+        const m = this.getAttribute('mode');
+        return m === 'estimate' ? 'estimate' : 'api';
     }
 
     private get theme(): BadgeTheme {
-        return (this.getAttribute('theme') as BadgeTheme) || 'dark';
+        const t = this.getAttribute('theme') as BadgeTheme;
+        return ALLOWED_THEMES.has(t) ? t : 'dark';
     }
-
 
     private get cacheTtl(): number {
         const val = this.getAttribute('cache-ttl');
-        return val ? parseInt(val, 10) : DEFAULT_CACHE_TTL;
+        const n = val ? parseInt(val, 10) : DEFAULT_CACHE_TTL;
+        return Number.isFinite(n) && n > 0 ? n : DEFAULT_CACHE_TTL;
     }
 
     private get apiUrl(): string {
@@ -107,40 +175,84 @@ export class CometWebCarbonBadge extends HTMLElement {
         return this.getAttribute('green-host') === 'true';
     }
 
+    private cacheKeyFor(canonicalUrl: string): string {
+        return buildCacheKey({
+            canonicalUrl,
+            mode: this.mode,
+            apiUrl: this.apiUrl,
+            greenHost: this.greenHost,
+        });
+    }
+
     // --- Lifecycle ---
 
     connectedCallback() {
+        if (!this.hasAttribute('tabindex')) {
+            this.setAttribute('tabindex', '-1');
+        }
         this.renderLoading();
         clearExpired(this.cacheTtl);
-        this.loadData();
+        this.scheduleLoad();
+    }
+
+    disconnectedCallback() {
+        this.abortInFlight();
+        if (this._scheduleTimer) {
+            clearTimeout(this._scheduleTimer);
+            this._scheduleTimer = null;
+        }
+        if (this._estimateTimer) {
+            clearTimeout(this._estimateTimer);
+            this._estimateTimer = null;
+        }
+        this._loadId++;
+        this._inFlight = false;
     }
 
     attributeChangedCallback() {
         if (this.isConnected) {
-            this.loadData();
+            this.scheduleLoad();
+        }
+    }
+
+    /** Debounce connected + attributeChanged into a single load (CB-11). */
+    private scheduleLoad() {
+        if (this._scheduleTimer) clearTimeout(this._scheduleTimer);
+        this._scheduleTimer = setTimeout(() => {
+            this._scheduleTimer = null;
+            void this.loadData();
+        }, 0);
+    }
+
+    private abortInFlight() {
+        if (this._abort) {
+            this._abort.abort();
+            this._abort = null;
         }
     }
 
     // --- Data loading ---
 
     private async loadData() {
-        const loadId = ++this._loadId;
-        const url = this.targetUrl;
+        if (!this.isConnected) return;
 
-        if (!url) {
-            this.renderError();
+        const loadId = ++this._loadId;
+        const force = this._forceNext;
+        this._forceNext = false;
+
+        const canonical = this.canonicalTargetUrl;
+        if (!canonical) {
+            this.renderUnknown('Invalid or missing URL');
             return;
         }
 
-        if (isCacheValid(url, this.cacheTtl)) {
-            const cached = getCached(url);
-            if (cached) {
-                if (loadId !== this._loadId) return;
-                this.data = {
-                    ...cached,
-                    score: co2ToScore(Math.max(0, toFiniteNumber(cached.co2Grams, 0))),
-                    verified: cached.verified === true,
-                };
+        const cacheKey = this.cacheKeyFor(canonical);
+
+        if (!force && isCacheValid(cacheKey, this.cacheTtl)) {
+            const cached = normalizeBadgeData(getCached(cacheKey));
+            if (cached && cached.co2Grams !== null) {
+                if (loadId !== this._loadId || !this.isConnected) return;
+                this.data = { ...cached, source: 'cache' };
                 this.dataSource = 'cache';
                 this.renderBadge();
                 return;
@@ -148,62 +260,114 @@ export class CometWebCarbonBadge extends HTMLElement {
         }
 
         if (this.mode === 'estimate') {
-            this.runEstimate(loadId);
-        } else {
-            await this.fetchFromAPI(url, loadId);
+            this.runEstimate(canonical, loadId);
+            return;
         }
+
+        await this.fetchFromAPI(canonical, cacheKey, loadId);
     }
 
-    private runEstimate(loadId = this._loadId) {
-        try {
-            // Defer by one task to allow the loading render to paint before heavy estimation
-            setTimeout(() => {
-                if (loadId !== this._loadId) return;
-                this.data = estimateCO2(this.greenHost);
+    /**
+     * Local estimate only for the current page (or explicit estimate mode).
+     * Never used as silent fallback for a remote `url` (CB-04).
+     */
+    private runEstimate(canonical: string, loadId = this._loadId) {
+        if (!samePageAsLocation(canonical) && this.getAttribute('url')) {
+            // Explicit remote url in estimate mode: still only measure *this* document —
+            // show unknown rather than mis-label host weight as the remote URL.
+            if (loadId === this._loadId && this.isConnected) {
+                console.warn(
+                    LOG_PREFIX,
+                    'Estimate mode measures the current page only; remote url cannot be estimated locally.',
+                );
+                this.renderUnknown('Local estimate requires the current page');
+            }
+            return;
+        }
+
+        if (this._estimateTimer) clearTimeout(this._estimateTimer);
+        this._estimateTimer = setTimeout(() => {
+            this._estimateTimer = null;
+            if (loadId !== this._loadId || !this.isConnected) return;
+            try {
+                const { data } = estimateCO2Detailed(this.greenHost);
+                data.url = canonical;
+                this.data = data;
                 this.dataSource = 'estimate';
-                setCache(this.targetUrl, this.data);
+                setCache(this.cacheKeyFor(canonical), data);
                 this.renderBadge();
-            }, 0);
-        } catch {
-            this.renderError();
-        }
+            } catch {
+                this.renderError();
+            }
+        }, 0);
     }
 
-    private async fetchFromAPI(url: string, loadId = this._loadId) {
+    private async fetchFromAPI(
+        canonical: string,
+        cacheKey: string,
+        loadId = this._loadId,
+    ) {
+        if (this._inFlight && loadId === this._loadId) {
+            // Single-flight: a newer schedule already bumped _loadId
+        }
+        this.abortInFlight();
+        const controller = new AbortController();
+        this._abort = controller;
+        this._inFlight = true;
+
         try {
-            const params = new URLSearchParams({ url });
+            const params = new URLSearchParams({ url: canonical });
             params.set('source', 'badge');
             try {
                 params.set('badge_origin', window.location.hostname);
-            } catch { /* SSR / non-browser — skip */ }
-            // api_key is sent via Authorization header, not URL, to avoid exposure in logs/history
+            } catch {
+                /* SSR */
+            }
 
-            const headers: Record<string, string> = { 'Accept': 'application/json' };
+            const headers: Record<string, string> = {
+                Accept: 'application/json',
+            };
             if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+            const timeoutId = setTimeout(
+                () => controller.abort(),
+                API_TIMEOUT_MS,
+            );
 
-            const response = await fetch(
-                `${this.apiUrl}/public/carbon-badge?${params}`,
-                { headers, signal: controller.signal },
-            ).finally(() => clearTimeout(timeoutId));
+            let response: Response;
+            try {
+                response = await fetch(
+                    `${this.apiUrl}/public/carbon-badge?${params}`,
+                    { headers, signal: controller.signal },
+                );
+            } finally {
+                clearTimeout(timeoutId);
+            }
+
+            if (loadId !== this._loadId || !this.isConnected) return;
 
             if (response.status === 429) {
-                const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
-                const delay = retryAfter > 0
-                    ? retryAfter * 1000
-                    : Math.min(1000 * Math.pow(2, this.retryCount), 30000);
+                const retryAfter = parseInt(
+                    response.headers.get('Retry-After') || '0',
+                    10,
+                );
+                const delay =
+                    retryAfter > 0
+                        ? retryAfter * 1000
+                        : Math.min(1000 * Math.pow(2, this.retryCount), 30000);
 
                 if (this.retryCount < MAX_RETRIES) {
                     this.retryCount++;
                     this.renderLoading('Retrying after rate limit…');
-                    setTimeout(() => this.fetchFromAPI(url, loadId), delay);
+                    setTimeout(() => {
+                        if (loadId !== this._loadId) return;
+                        void this.fetchFromAPI(canonical, cacheKey, loadId);
+                    }, delay);
                     return;
                 }
 
-                console.warn(LOG_PREFIX, 'API rate limited, falling back to estimate mode.');
-                this.runEstimate(loadId);
+                console.warn(LOG_PREFIX, 'API rate limited; showing N/D.');
+                this.renderUnknown('Rate limited — try again later');
                 return;
             }
 
@@ -211,41 +375,49 @@ export class CometWebCarbonBadge extends HTMLElement {
                 throw new Error(`HTTP ${response.status}`);
             }
 
-            const apiData: APIResponse = await response.json();
-            if (loadId !== this._loadId) return;
+            // Timeout covers body + validate (CB-12)
+            const apiData = (await response.json()) as APIResponse;
+            if (loadId !== this._loadId || !this.isConnected) return;
 
-            const co2Grams = Math.max(0, toFiniteNumber(apiData.co2_grams, 0));
-            // Letter bands are SoT in co2ToScore / README — do not trust a divergent API letter.
-            const score = co2ToScore(co2Grams);
+            const parsed = parseApiResponse(apiData, {
+                requestedUrl: canonical,
+            });
+            if (!parsed) {
+                this.renderUnknown('No usable measurement');
+                return;
+            }
 
-            this.data = {
-                url: apiData.url,
-                co2Grams,
-                score,
-                cleanerThan: clamp(toFiniteNumber(apiData.cleaner_than, 0), 0, 100),
-                pageWeightKb: Math.max(0, toFiniteNumber(apiData.page_weight_kb, 0)),
-                greenHost: apiData.green_host,
-                verified: apiData.verified === true,
-                timestamp: Date.now(),
-            };
-            this.dataSource = 'api';
-
-            setCache(url, this.data);
+            this.data = parsed;
+            this.dataSource = parsed.source;
+            setCache(cacheKey, parsed);
             this.retryCount = 0;
             this.renderBadge();
         } catch (error) {
-            if (loadId !== this._loadId) return;
-            const isAbort = error instanceof DOMException && error.name === 'AbortError';
+            if (loadId !== this._loadId || !this.isConnected) return;
+            const isAbort =
+                error instanceof DOMException && error.name === 'AbortError';
             if (isAbort) {
-                console.warn(LOG_PREFIX, 'API request timed out, falling back to estimate mode.');
+                console.warn(LOG_PREFIX, 'API request timed out.');
             }
 
-            if (this.retryCount < MAX_RETRIES) {
+            // Network / HTTP errors: limited retry then N/D — never host-page estimate (CB-04).
+            if (this.retryCount < 1 && !isAbort) {
                 this.retryCount++;
-                this.runEstimate(loadId);
-            } else {
-                this.renderError();
+                this.renderLoading('Retrying…');
+                setTimeout(() => {
+                    if (loadId !== this._loadId) return;
+                    void this.fetchFromAPI(canonical, cacheKey, loadId);
+                }, 400);
+                return;
             }
+
+            // CB-04: never fall back to host-page estimate for API failures.
+            this.renderUnknown(
+                isAbort ? 'Request timed out' : 'Unable to load measurement',
+            );
+        } finally {
+            if (this._abort === controller) this._abort = null;
+            this._inFlight = false;
         }
     }
 
@@ -253,25 +425,36 @@ export class CometWebCarbonBadge extends HTMLElement {
 
     private dispatchBadgeEvent() {
         if (!this.data) return;
-        this.dispatchEvent(new CustomEvent('cometweb:badge-load', {
-            bubbles: true,
-            composed: true,
-            detail: {
-                url: this.data.url,
-                co2Grams: this.data.co2Grams,
-                score: this.data.score,
-                cleanerThan: this.data.cleanerThan,
-                pageWeightKb: this.data.pageWeightKb,
-                greenHost: this.data.greenHost,
-                source: this.dataSource,
-            },
-        }));
+        const d = cloneBadgeData(this.data);
+        this.dispatchEvent(
+            new CustomEvent('cometweb:badge-load', {
+                bubbles: true,
+                composed: true,
+                detail: {
+                    url: d.url,
+                    co2Grams: d.co2Grams,
+                    score: d.score,
+                    cleanerThan: d.cleanerThan,
+                    pageWeightKb: d.pageWeightKb,
+                    greenHost: d.greenHost,
+                    source: this.dataSource,
+                    status: d.status,
+                    formulaId: d.formulaId,
+                    measuredAt: d.measuredAt,
+                    verified: d.verified,
+                },
+            }),
+        );
     }
 
     // --- Render methods ---
 
     private updateStyles() {
-        this.shadow.adoptedStyleSheets = [getStyleSheet(this.theme)];
+        try {
+            this.shadow.adoptedStyleSheets = [getStyleSheet(this.theme)];
+        } catch {
+            /* ignore */
+        }
     }
 
     private renderLoading(label = 'Calculating carbon footprint\u2026') {
@@ -290,37 +473,64 @@ export class CometWebCarbonBadge extends HTMLElement {
     `;
     }
 
-    private renderBadge() {
-        if (!this.data) return;
+    private evidenceHref(): string {
+        const fromData = this.data?.evidenceUrl;
+        if (fromData && /^https?:\/\//i.test(fromData)) return fromData;
+        return DEFAULT_EVIDENCE_URL;
+    }
 
-        const co2Grams = Math.max(0, toFiniteNumber(this.data.co2Grams, 0));
-        // Reconcile letter to published bands even for cached payloads.
-        const score = co2ToScore(co2Grams);
-        this.data.score = score;
-        const cleanerThan = clamp(toFiniteNumber(this.data.cleanerThan, 0), 0, 100);
+    private renderBadge() {
+        const normalized = normalizeBadgeData(this.data);
+        if (!normalized || normalized.co2Grams === null || !normalized.score) {
+            this.renderUnknown('No usable measurement');
+            return;
+        }
+        this.data = normalized;
+
+        const co2Grams = normalized.co2Grams;
+        const score = normalized.score;
         const scoreClass = SCORE_CLASS_MAP[score] || 'grade-unknown';
-        const co2Display = co2Grams < 0.01 ? '&lt;0.01' : escapeHtml(co2Grams.toFixed(2));
+        const co2Display =
+            co2Grams < 0.01 ? '&lt;0.01' : escapeHtml(co2Grams.toFixed(2));
         const safeScore = escapeHtml(score);
-        const safeCleanerThan = escapeHtml(cleanerThan.toString());
-        const isVerified = this.data.verified === true;
-        const footerLabel = isVerified ? 'Verified by CometWeb' : 'Powered by CometWeb';
+        const isVerified = normalized.verified === true;
+        const footerLabel = isVerified
+            ? 'Verified by CometWeb'
+            : 'Powered by CometWeb';
+
+        let subtitleHtml: string;
+        if (
+            normalized.cleanerThan !== null &&
+            Number.isFinite(normalized.cleanerThan)
+        ) {
+            const pct = escapeHtml(
+                String(clamp(normalized.cleanerThan, 0, 100)),
+            );
+            subtitleHtml = `Cleaner than <span class="cw-highlight">${pct}%</span> of web`;
+        } else if (normalized.source === 'estimate') {
+            subtitleHtml = normalized.estimatePartial
+                ? 'Local estimate (partial)'
+                : 'Local SWDM v4 estimate';
+        } else {
+            subtitleHtml = 'Estimated page-load footprint';
+        }
+
         const aria = `Carbon footprint: ${co2Grams.toFixed(2)}g CO\u2082e per visit, score ${score}`;
         const safeAria = escapeHtml(aria);
+        const href = escapeHtml(this.evidenceHref());
 
         this.updateStyles();
         this.shadow.innerHTML = `
       <div role="status" aria-live="polite" aria-label="${safeAria}">
         <a class="cw-badge ${this.theme}"
-           href="https://cometweb.io/insight/ecology"
+           href="${href}"
            target="_blank"
            rel="noopener noreferrer"
            aria-label="${safeAria} — CometWeb (opens in new tab)">
           <div class="cw-grade ${scoreClass}" aria-hidden="true">${safeScore}</div>
           <div class="cw-content">
             <div class="cw-title">${co2Display}g CO\u2082e <small>/ visit</small></div>
-            <div class="cw-subtitle">
-              Cleaner than <span class="cw-highlight">${safeCleanerThan}%</span> of web
-            </div>
+            <div class="cw-subtitle">${subtitleHtml}</div>
           </div>
           <div class="cw-footer" aria-hidden="true">${footerLabel}</div>
         </a>
@@ -329,14 +539,34 @@ export class CometWebCarbonBadge extends HTMLElement {
         this.dispatchBadgeEvent();
     }
 
-    private renderError() {
+    /** Honest N/D — never invent A+ from missing data (CB-01). */
+    private renderUnknown(reason: string) {
+        this.data = {
+            url: this.canonicalTargetUrl || this.rawTargetUrl || '',
+            co2Grams: null,
+            score: null,
+            cleanerThan: null,
+            pageWeightKb: null,
+            greenHost: null,
+            verified: false,
+            timestamp: Date.now(),
+            status: 'unknown',
+            source: 'api',
+            formulaId: null,
+            measurementMethod: null,
+            measuredAt: null,
+            validUntil: null,
+            evidenceUrl: null,
+        };
         this.updateStyles();
+        const safeReason = escapeHtml(reason);
         this.shadow.innerHTML = `
-      <div role="status" aria-live="polite" aria-label="Carbon footprint calculation failed">
+      <div role="status" aria-live="polite" aria-label="Carbon footprint not available">
         <div class="cw-badge error">
-          <div class="cw-grade grade-f" aria-hidden="true">!</div>
+          <div class="cw-grade grade-unknown" aria-hidden="true">N/D</div>
           <div class="cw-content">
-            <div class="cw-title">Unable to calculate</div>
+            <div class="cw-title">Not available</div>
+            <div class="cw-subtitle">${safeReason}</div>
             <div class="cw-error-actions">
               <button type="button" class="cw-retry-btn" aria-label="Retry carbon measurement">Retry</button>
             </div>
@@ -345,22 +575,42 @@ export class CometWebCarbonBadge extends HTMLElement {
         </div>
       </div>
     `;
-        this.dispatchEvent(new CustomEvent('cometweb:badge-error', {
-            bubbles: true,
-            composed: true,
-            detail: { url: this.targetUrl },
-        }));
+        this.dispatchEvent(
+            new CustomEvent('cometweb:badge-error', {
+                bubbles: true,
+                composed: true,
+                detail: {
+                    url: this.canonicalTargetUrl || this.rawTargetUrl,
+                    reason,
+                    status: 'unknown',
+                },
+            }),
+        );
+        this.bindRetry();
+    }
 
+    private renderError() {
+        this.renderUnknown('Unable to calculate');
+    }
+
+    private bindRetry() {
         const btn = this.shadow.querySelector<HTMLButtonElement>('.cw-retry-btn');
         if (btn) {
             btn.addEventListener('click', () => {
                 this.retryCount = 0;
                 this.renderLoading();
-                this.loadData();
-                // Return focus to the badge host so keyboard users don't lose context
+                this.reload({ force: true });
                 this.focus();
             });
         }
     }
+}
 
+/** SSR-safe registration (CB-03). */
+export function registerCarbonBadge(): typeof CometWebCarbonBadge | null {
+    if (typeof customElements === 'undefined') return null;
+    if (!customElements.get('cometweb-carbon-badge')) {
+        customElements.define('cometweb-carbon-badge', CometWebCarbonBadge);
+    }
+    return CometWebCarbonBadge;
 }

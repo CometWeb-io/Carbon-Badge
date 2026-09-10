@@ -1,23 +1,36 @@
 /**
  * @cometweb/carbon-badge
- * 
+ *
  * Lightweight web component showing CO₂e emissions per page view.
  * Powered by CometWeb & SWDM v4.
- * 
+ *
  * Usage:
- *   <script src="https://unpkg.com/@cometweb/carbon-badge@1.0.7/dist/cometweb-carbon-badge.esm.js"></script>
+ *   <script type="module" src="https://unpkg.com/@cometweb/carbon-badge@1.0.8/dist/cometweb-carbon-badge.esm.js"></script>
  *   <cometweb-carbon-badge url="https://example.com"></cometweb-carbon-badge>
- * 
+ *
  * Or via npm:
- *   import '@cometweb/carbon-badge';
+ *   import { registerCarbonBadge } from '@cometweb/carbon-badge';
+ *   registerCarbonBadge();
  */
 
-export { CometWebCarbonBadge } from './badge';
-export { estimateCO2, co2ToScore } from './estimator';
-export type { BadgeData, ScoreLetter, BadgeTheme, BadgeMode } from './types';
+export { CometWebCarbonBadge, registerCarbonBadge } from './badge';
+export { estimateCO2, estimateCO2Detailed, co2ToScore } from './estimator';
+export {
+    canonicalizeBadgeUrl,
+    parseApiResponse,
+    normalizeBadgeData,
+} from './normalize';
+export type {
+    BadgeData,
+    ScoreLetter,
+    BadgeTheme,
+    BadgeMode,
+    MeasurementStatus,
+    MeasurementSource,
+    APIResponse,
+} from './types';
 
-import { CometWebCarbonBadge } from './badge';
+import { registerCarbonBadge } from './badge';
 
-if (typeof customElements !== 'undefined' && !customElements.get('cometweb-carbon-badge')) {
-    customElements.define('cometweb-carbon-badge', CometWebCarbonBadge);
-}
+// Auto-register in browsers only — safe for SSR / Node imports (CB-03).
+registerCarbonBadge();
