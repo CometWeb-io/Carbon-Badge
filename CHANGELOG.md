@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Build now exits after Rollup finishes even when a plugin leaves an open handle.
+- Non-production TypeScript source-map emission now matches Rollup's output setting, removing the misleading build warning.
+
+### Changed
+- Package metadata now points at the canonical `CometWeb-io/Carbon-Badge` repository.
+
+---
+
 ## [1.0.8] — 2026-09-10
 
 ### Fixed

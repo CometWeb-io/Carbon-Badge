@@ -23,6 +23,7 @@ export default {
             tsconfig: './tsconfig.json',
             declaration: true,
             declarationDir: 'dist',
+            sourceMap: !isProd,
         }),
         terser({
             compress: {

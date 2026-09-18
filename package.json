@@ -21,7 +21,7 @@
         "CHANGELOG.md"
     ],
     "scripts": {
-        "build": "rollup -c rollup.config.mjs",
+        "build": "rollup -c rollup.config.mjs --forceExit",
         "dev": "rollup -c rollup.config.mjs --watch",
         "typecheck": "tsc --noEmit",
         "test": "vitest run",
@@ -46,7 +46,7 @@
     "homepage": "https://cometweb.io",
     "repository": {
         "type": "git",
-        "url": "https://github.com/MaciejZet/CometWeb-Carbon_Badge.git"
+        "url": "https://github.com/CometWeb-io/Carbon-Badge.git"
     },
     "publishConfig": {
         "access": "public"
