@@ -466,7 +466,8 @@ export class CometWebCarbonBadge extends HTMLElement {
           <div class="cw-grade grade-unknown" aria-hidden="true">\u2026</div>
           <div class="cw-content">
             <div class="cw-title">Measuring\u2026</div>
-            <div class="cw-subtitle">Powered by CometWeb</div>
+            <div class="cw-subtitle">Estimating page-load footprint</div>
+            <div class="cw-footer" aria-hidden="true">Powered by CometWeb</div>
           </div>
         </div>
       </div>
@@ -531,8 +532,8 @@ export class CometWebCarbonBadge extends HTMLElement {
           <div class="cw-content">
             <div class="cw-title">${co2Display}g CO\u2082e <small>/ visit</small></div>
             <div class="cw-subtitle">${subtitleHtml}</div>
+            <div class="cw-footer" aria-hidden="true">${footerLabel}</div>
           </div>
-          <div class="cw-footer" aria-hidden="true">${footerLabel}</div>
         </a>
       </div>
     `;
@@ -570,8 +571,8 @@ export class CometWebCarbonBadge extends HTMLElement {
             <div class="cw-error-actions">
               <button type="button" class="cw-retry-btn" aria-label="Retry carbon measurement">Retry</button>
             </div>
+            <div class="cw-footer" aria-hidden="true">Powered by CometWeb</div>
           </div>
-          <div class="cw-footer" aria-hidden="true">Powered by CometWeb</div>
         </div>
       </div>
     `;

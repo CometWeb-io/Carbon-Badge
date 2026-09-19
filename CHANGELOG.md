@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add `variant="compact"` and `variant="minimal"` in both themes; default layout remains unchanged. Visual switches do not reload measurements.
+
+- Simplify badge styling with flat colors, a smaller grade tile and lighter attribution.
+- Keep attribution in the content flow, wrap long labels and remove hover movement and glow.
+- Show light, dark and unavailable examples side by side in the README.
+
+
 All notable changes to `@cometweb/carbon-badge` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
