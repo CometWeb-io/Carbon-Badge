@@ -8,22 +8,34 @@ on:
 jobs:
   gate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
         with:
-          node-version: '22'
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
           cache: npm
       - name: Install
         run: npm ci
+      - name: Dependency security gate
+        run: npm run security:audit
       - name: Typecheck
         run: npm run typecheck
+      - name: Typecheck tests and E2E
+        run: npm run typecheck:test
       - name: Unit tests
         run: npm test
       - name: Production build
         run: npm run clean && NODE_ENV=production npm run build
+      - name: Bundle size budget
+        run: npm run size:check
       - name: Pack integrity
         run: npm pack --dry-run
+      - name: Package consumer smoke
+        run: npm run pack:consumer
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Browser E2E

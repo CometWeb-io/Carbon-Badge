@@ -1,5 +1,5 @@
 /**
- * Tests for localStorage caching layer (cache.ts) — schema v2
+ * Tests for localStorage caching layer (cache.ts) — schema v3
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
@@ -13,6 +13,7 @@ import type { BadgeData } from '../types';
 
 const mockData: BadgeData = {
     url: 'https://example.com',
+    publicId: null,
     co2Grams: 0.23,
     score: 'B',
     cleanerThan: 72,
@@ -31,6 +32,7 @@ const mockData: BadgeData = {
 
 const key = buildCacheKey({
     canonicalUrl: 'https://example.com',
+    snapshotId: null,
     mode: 'api',
     apiUrl: 'https://app.cometweb.io/api',
     greenHost: false,
@@ -65,18 +67,21 @@ describe('buildCacheKey', () => {
     it('changes when mode or green-host changes', () => {
         const a = buildCacheKey({
             canonicalUrl: 'https://example.com',
+            snapshotId: null,
             mode: 'api',
             apiUrl: 'https://app.cometweb.io/api',
             greenHost: false,
         });
         const b = buildCacheKey({
             canonicalUrl: 'https://example.com',
+            snapshotId: null,
             mode: 'estimate',
             apiUrl: 'https://app.cometweb.io/api',
             greenHost: false,
         });
         const c = buildCacheKey({
             canonicalUrl: 'https://example.com',
+            snapshotId: null,
             mode: 'api',
             apiUrl: 'https://app.cometweb.io/api',
             greenHost: true,
@@ -84,11 +89,29 @@ describe('buildCacheKey', () => {
         expect(a).not.toBe(b);
         expect(a).not.toBe(c);
     });
+
+    it('changes when the published snapshot identity changes', () => {
+        const a = buildCacheKey({
+            canonicalUrl: 'https://example.com',
+            snapshotId: 'abcdef0123',
+            mode: 'snapshot',
+            apiUrl: 'https://app.cometweb.io/api',
+            greenHost: false,
+        });
+        const b = buildCacheKey({
+            canonicalUrl: 'https://example.com',
+            snapshotId: 'fedcba9876',
+            mode: 'snapshot',
+            apiUrl: 'https://app.cometweb.io/api',
+            greenHost: false,
+        });
+        expect(a).not.toBe(b);
+    });
 });
 
 describe('setCache / getCached', () => {
     it('stores and retrieves data for a key', () => {
-        setCache(key, mockData);
+        setCache(key, mockData, 720);
         const result = getCached(key);
         expect(result).toEqual(mockData);
     });
@@ -110,7 +133,7 @@ describe('setCache / getCached', () => {
                 throw new DOMException('QuotaExceededError');
             },
         });
-        setCache(key, mockData);
+        setCache(key, mockData, 720);
         expect(warnSpy).toHaveBeenCalledWith(
             expect.stringContaining('Cache write failed'),
             expect.anything(),
@@ -121,22 +144,23 @@ describe('setCache / getCached', () => {
 
 describe('isCacheValid', () => {
     it('returns true for a fresh entry within TTL', () => {
-        setCache(key, mockData);
-        expect(isCacheValid(key, 720)).toBe(true);
+        setCache(key, mockData, 720);
+        expect(isCacheValid(key)).toBe(true);
     });
 
     it('returns false for an expired entry', () => {
         const expiredEntry = {
             data: mockData,
             ts: Date.now() - 25 * 60 * 60 * 1000,
-            schema: 2,
+            schema: 3,
+            expiresAt: Date.now() - 1,
         };
         localStorage.setItem(key, JSON.stringify(expiredEntry));
-        expect(isCacheValid(key, 720)).toBe(false);
+        expect(isCacheValid(key)).toBe(false);
     });
 
     it('returns false when no entry exists', () => {
-        expect(isCacheValid('cwb:v2:none', 720)).toBe(false);
+        expect(isCacheValid('cwb:v2:none')).toBe(false);
     });
 });
 
@@ -145,28 +169,62 @@ describe('clearExpired', () => {
         const expiredEntry = {
             data: mockData,
             ts: Date.now() - 25 * 60 * 60 * 1000,
-            schema: 2,
+            schema: 3,
+            expiresAt: Date.now() - 1,
         };
         localStorage.setItem(key, JSON.stringify(expiredEntry));
-        clearExpired(720);
+        clearExpired();
         expect(localStorage.getItem(key)).toBeNull();
     });
 
     it('keeps fresh entries', () => {
-        setCache(key, mockData);
-        clearExpired(720);
+        setCache(key, mockData, 720);
+        clearExpired();
         expect(getCached(key)).toEqual(mockData);
     });
 
     it('removes legacy v1 keys', () => {
         localStorage.setItem('cwb:https://legacy.com', JSON.stringify({ data: mockData, ts: Date.now() }));
-        clearExpired(720);
+        clearExpired();
         expect(localStorage.getItem('cwb:https://legacy.com')).toBeNull();
     });
 
     it('does not touch keys without the cwb prefix', () => {
         localStorage.setItem('other:key', 'untouched');
-        clearExpired(720);
+        clearExpired();
         expect(localStorage.getItem('other:key')).toBe('untouched');
+    });
+
+    it('uses each entry deadline instead of the mounting badge TTL', () => {
+        const freshEntry = {
+            data: mockData,
+            ts: Date.now(),
+            expiresAt: Date.now() + 60 * 60 * 1000,
+            schema: 3,
+        };
+        localStorage.setItem(key, JSON.stringify(freshEntry));
+
+        clearExpired();
+
+        expect(localStorage.getItem(key)).not.toBeNull();
+        expect(isCacheValid(key)).toBe(true);
+    });
+
+    it('caps cache lifetime at server validUntil', () => {
+        const data = {
+            ...mockData,
+            validUntil: new Date(Date.now() + 60_000).toISOString(),
+        };
+        setCache(key, data, 720);
+        const entry = JSON.parse(localStorage.getItem(key)!);
+
+        expect(entry.expiresAt).toBeLessThanOrEqual(Date.now() + 60_000);
+    });
+
+    it('rejects revoked entries even when their deadline is fresh', () => {
+        const data = { ...mockData, status: 'revoked' as const };
+        setCache(key, data, 720);
+
+        expect(isCacheValid(key)).toBe(false);
     });
 });

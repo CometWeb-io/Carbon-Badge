@@ -4,21 +4,23 @@
  * Fail-closed: missing / non-finite CO₂ never becomes a letter grade.
  */
 
-import type { APIResponse, BadgeData, MeasurementSource, ScoreLetter } from './types';
-import { FORMULA_ID_TRANSFER_V2 } from './types';
+import type {
+    APIResponse,
+    BadgeData,
+    MeasurementSource,
+    MeasurementStatus,
+    ScoreLetter,
+} from './types';
 import { co2ToScore } from './estimator';
+import { clamp, toFiniteNumberOrNull } from './utils';
+import { validateSnapshotId } from './api-client';
 
-/** Tracking / auth query keys stripped from public badge identity. */
+/** Tracking query keys stripped from public badge identity. */
 const STRIP_QUERY_KEYS = new Set([
-    'token',
-    'access_token',
     'auth',
-    'authorization',
-    'api_key',
-    'apikey',
     'key',
-    'session',
-    'sid',
+    'apikey',
+    'ref',
     'utm_source',
     'utm_medium',
     'utm_campaign',
@@ -30,22 +32,13 @@ const STRIP_QUERY_KEYS = new Set([
     'mc_cid',
     'mc_eid',
     '_ga',
-    'ref',
 ]);
 
-export function toFiniteNumberOrNull(value: unknown): number | null {
-    if (value === null || value === undefined || value === '') return null;
-    const n = typeof value === 'number' ? value : Number(value);
-    return Number.isFinite(n) ? n : null;
-}
-
-export function clamp(value: number, min: number, max: number): number {
-    return Math.min(max, Math.max(min, value));
-}
+const SENSITIVE_QUERY = /^(token|access_token|authorization|api[_-]?key|session(?:[_-].*)?|sid|jwt|signature|sig|code|x-amz-.+)$/i;
 
 /**
- * Canonical public URL identity: strip fragment, drop tracking/auth query params,
- * keep semantic query (e.g. ?item=123).
+ * Canonical public URL identity: strip fragments and known tracking parameters,
+ * reject credential-bearing URLs, and keep semantic query (e.g. ?item=123).
  */
 export function canonicalizeBadgeUrl(raw: string): string | null {
     const trimmed = (raw || '').trim();
@@ -53,12 +46,17 @@ export function canonicalizeBadgeUrl(raw: string): string | null {
     try {
         const u = new URL(trimmed);
         if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+        if (u.username || u.password) return null;
         u.hash = '';
         const kept = new URLSearchParams();
         u.searchParams.forEach((value, key) => {
+            if (SENSITIVE_QUERY.test(key)) {
+                throw new Error('credential-bearing URL');
+            }
             if (STRIP_QUERY_KEYS.has(key.toLowerCase())) return;
             kept.append(key, value);
         });
+        kept.sort();
         const qs = kept.toString();
         u.search = qs ? `?${qs}` : '';
         // Normalize trailing slash on bare path only (keep path identity otherwise)
@@ -88,6 +86,7 @@ function mapMeasurementSource(raw: string | null | undefined): MeasurementSource
 
 export interface NormalizeApiOptions {
     requestedUrl: string;
+    requestedSnapshotId?: string | null;
     now?: number;
 }
 
@@ -101,15 +100,93 @@ export function parseApiResponse(
 ): BadgeData | null {
     if (!apiData || typeof apiData !== 'object') return null;
 
+    let publicId: string | null = null;
+    if (typeof apiData.public_id === 'string' && apiData.public_id.trim()) {
+        try {
+            publicId = validateSnapshotId(apiData.public_id);
+        } catch {
+            if (options.requestedSnapshotId) return null;
+        }
+    }
+    if (options.requestedSnapshotId) {
+        let requestedSnapshotId: string;
+        try {
+            requestedSnapshotId = validateSnapshotId(options.requestedSnapshotId);
+        } catch {
+            return null;
+        }
+        if (!publicId || publicId !== requestedSnapshotId) return null;
+    }
+
+    const rawMeasurementSource =
+        typeof apiData.measurement_source === 'string'
+            ? apiData.measurement_source.trim().toLowerCase()
+            : null;
+    const measurementSource = mapMeasurementSource(rawMeasurementSource);
+    if (
+        options.requestedSnapshotId &&
+        rawMeasurementSource !== 'published_snapshot'
+    ) {
+        return null;
+    }
+
+    const rawStatus =
+        typeof apiData.status === 'string'
+            ? apiData.status.trim().toLowerCase()
+            : null;
+    let statusFromApi: MeasurementStatus | null = null;
+    if (rawStatus === 'ok' || rawStatus === 'ready') statusFromApi = 'ready';
+    else if (rawStatus === 'partial') statusFromApi = 'partial';
+    else if (rawStatus === 'stale') statusFromApi = 'stale';
+    else if (rawStatus === 'revoked') statusFromApi = 'revoked';
+    else if (rawStatus === 'unknown') statusFromApi = 'unknown';
+    else if (rawStatus !== null) return null;
+    if (options.requestedSnapshotId && statusFromApi !== 'ready') return null;
+
     const co2Grams = toFiniteNumberOrNull(apiData.co2_grams);
     if (co2Grams === null || co2Grams < 0) return null;
 
     const responseUrl = typeof apiData.url === 'string' ? apiData.url : '';
-    if (responseUrl && !sameUrlIdentity(responseUrl, options.requestedUrl)) {
+    const canonicalResponseUrl = responseUrl
+        ? canonicalizeBadgeUrl(responseUrl)
+        : null;
+    if (responseUrl && !canonicalResponseUrl) return null;
+    if (
+        !options.requestedSnapshotId &&
+        responseUrl &&
+        !sameUrlIdentity(responseUrl, options.requestedUrl)
+    ) {
         // Soft mismatch: still accept if requested canonical equals response host+path
         // but reject when response URL is empty or clearly different page.
         return null;
     }
+
+    if (statusFromApi === 'revoked' || statusFromApi === 'unknown') return null;
+
+    const validUntil =
+        typeof apiData.valid_until === 'string' && apiData.valid_until.trim()
+            ? apiData.valid_until.trim()
+            : null;
+    const validUntilMs = validUntil ? Date.parse(validUntil) : Number.NaN;
+    if (options.requestedSnapshotId && !Number.isFinite(validUntilMs)) {
+        return null;
+    }
+    const measuredAt =
+        (typeof apiData.measured_at === 'string' && apiData.measured_at) ||
+        (typeof apiData.scan_measured_at === 'string' && apiData.scan_measured_at) ||
+        null;
+    if (options.requestedSnapshotId) {
+        if (!measuredAt || !Number.isFinite(Date.parse(measuredAt))) {
+            return null;
+        }
+    }
+    const expired = Number.isFinite(validUntilMs) && validUntilMs <= (options.now ?? Date.now());
+    const status =
+        expired || statusFromApi === 'stale'
+            ? 'stale'
+            : statusFromApi === 'partial'
+              ? 'partial'
+              : 'ready';
 
     const score: ScoreLetter = co2ToScore(co2Grams);
     const cleanerRaw = toFiniteNumberOrNull(
@@ -122,21 +199,9 @@ export function parseApiResponse(
     const greenHost =
         typeof apiData.green_host === 'boolean' ? apiData.green_host : null;
 
-    const measuredAt =
-        (typeof apiData.measured_at === 'string' && apiData.measured_at) ||
-        (typeof apiData.scan_measured_at === 'string' && apiData.scan_measured_at) ||
-        null;
-
-    const status =
-        apiData.status === 'partial' ||
-        apiData.status === 'stale' ||
-        apiData.status === 'revoked' ||
-        apiData.status === 'unknown'
-            ? apiData.status
-            : 'ready';
-
     return {
-        url: responseUrl || options.requestedUrl,
+        url: canonicalResponseUrl || options.requestedUrl,
+        publicId,
         co2Grams,
         score,
         cleanerThan,
@@ -145,18 +210,17 @@ export function parseApiResponse(
         verified: apiData.verified === true,
         timestamp: options.now ?? Date.now(),
         status,
-        source: mapMeasurementSource(apiData.measurement_source),
+        source: measurementSource,
         formulaId:
-            (typeof apiData.formula_id === 'string' && apiData.formula_id) ||
-            FORMULA_ID_TRANSFER_V2,
+            typeof apiData.formula_id === 'string' && apiData.formula_id.trim()
+                ? apiData.formula_id.trim()
+                : null,
         measurementMethod:
             (typeof apiData.measurement_method === 'string' &&
                 apiData.measurement_method) ||
             null,
         measuredAt,
-        validUntil:
-            (typeof apiData.valid_until === 'string' && apiData.valid_until) ||
-            null,
+        validUntil,
         evidenceUrl:
             (typeof apiData.evidence_url === 'string' && apiData.evidence_url) ||
             null,
@@ -167,22 +231,27 @@ export function parseApiResponse(
 export function normalizeBadgeData(data: BadgeData | null | undefined): BadgeData | null {
     if (!data) return null;
     const co2 = toFiniteNumberOrNull(data.co2Grams);
-    if (co2 === null || co2 < 0) {
+    if (co2 === null || co2 < 0 || data.status === 'revoked' || data.status === 'unknown') {
         return {
             ...data,
             co2Grams: null,
             score: null,
+            cleanerThan: null,
             status: data.status === 'revoked' ? 'revoked' : 'unknown',
         };
     }
+    const validUntilMs = data.validUntil ? Date.parse(data.validUntil) : Number.NaN;
+    const status =
+        Number.isFinite(validUntilMs) && validUntilMs <= Date.now()
+            ? 'stale'
+            : data.status;
+    const cleanerThan = toFiniteNumberOrNull(data.cleanerThan);
     return {
         ...data,
         co2Grams: co2,
         score: co2ToScore(co2),
-        cleanerThan:
-            data.cleanerThan === null || data.cleanerThan === undefined
-                ? null
-                : clamp(toFiniteNumberOrNull(data.cleanerThan) ?? 0, 0, 100),
+        status,
+        cleanerThan: cleanerThan === null ? null : clamp(cleanerThan, 0, 100),
     };
 }
 

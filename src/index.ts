@@ -2,11 +2,11 @@
  * @cometweb/carbon-badge
  *
  * Lightweight web component showing CO₂e emissions per page view.
- * Powered by CometWeb & SWDM v4.
+ * Powered by CometWeb & a documented SWDM v4 first-load lite approximation.
  *
  * Usage:
  *   <script type="module" src="https://unpkg.com/@cometweb/carbon-badge@1.0.8/dist/cometweb-carbon-badge.esm.js"></script>
- *   <cometweb-carbon-badge url="https://example.com"></cometweb-carbon-badge>
+ *   <cometweb-carbon-badge snapshot-id="<published_public_id>"></cometweb-carbon-badge>
  *
  * Or via npm:
  *   import { registerCarbonBadge } from '@cometweb/carbon-badge';

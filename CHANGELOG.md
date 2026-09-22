@@ -8,11 +8,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Fixed
-- Build now exits after Rollup finishes even when a plugin leaves an open handle.
-- Non-production TypeScript source-map emission now matches Rollup's output setting, removing the misleading build warning.
+- Rollup now completes without `--forceExit`, so build lifecycle problems are not masked.
+- Node/SSR imports no longer evaluate the Web Component against missing browser globals.
+- Missing timing/DOM measurement now renders N/D instead of a fabricated 500 KiB estimate.
+- Expired, revoked, unknown, partial, malformed, and untrusted API data are handled explicitly.
+- Cache entries now carry their own expiry and respect server `valid_until`.
+- Constructable Stylesheet fallback, retry timer cleanup, full body timeout, and origin validation are covered.
+- Snapshot responses now require published-snapshot provenance, valid runtime status, and dated freshness fields; malformed or mismatched payloads fail closed.
+- Credential-bearing URLs are never retained in error state or error events, and non-transient HTTP failures no longer trigger duplicate retries.
 
 ### Changed
+- Published snapshot mode is now the owner-first embed path; live API and local estimate remain explicit secondary modes.
+- Snapshot rendering exposes measurement date and public provenance, and restricts the Verified footer to published snapshots.
 - Package metadata now points at the canonical `CometWeb-io/Carbon-Badge` repository.
+- Estimate mode uses `swdm-v4-lite-first-load-v1` with decimal GB and the documented SWDM v4 intensities.
+- `api-key` is documented as a publishable/scoped token; authenticated requests cannot target arbitrary API origins.
+- CI now runs dependency audit, test/E2E typecheck, package-consumer smoke, and a lockfile-owned static server.
+- Transport and rendering are split into pure, directly tested modules; the component remains the lifecycle adapter.
+- Security workflow adds CodeQL, dependency review, CycloneDX SBOM artifacts, and package provenance attestation on `main`.
+- Bundle size is now measured in CI; current ESM/UMD output is approximately 8 KB gzip with an 8.5 KB regression budget.
+- `happy-dom`, Vitest, Terser, and transitive toolchain dependencies were updated to audited versions.
 
 ---
 

@@ -12,7 +12,7 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
   },
   webServer: {
-    command: 'npx --yes serve . -l 4177 --cors',
+    command: 'node scripts/serve-static.mjs 4177',
     port: 4177,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

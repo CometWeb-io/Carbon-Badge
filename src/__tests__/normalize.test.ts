@@ -15,9 +15,9 @@ describe('canonicalizeBadgeUrl', () => {
         );
     });
 
-    it('strips tracking and token query params but keeps semantic query', () => {
+    it('strips tracking query params but keeps semantic query', () => {
         const out = canonicalizeBadgeUrl(
-            'https://example.com/catalog?item=123&utm_source=x&token=secret',
+            'https://example.com/catalog?item=123&utm_source=x',
         );
         expect(out).toBe('https://example.com/catalog?item=123');
     });
@@ -31,6 +31,18 @@ describe('canonicalizeBadgeUrl', () => {
         const a = canonicalizeBadgeUrl('https://example.com/c?item=123');
         const b = canonicalizeBadgeUrl('https://example.com/c?item=456');
         expect(a).not.toBe(b);
+    });
+
+    it('rejects credentials and credential-bearing query parameters', () => {
+        expect(canonicalizeBadgeUrl('https://user:password@example.com/')).toBeNull();
+        expect(canonicalizeBadgeUrl('https://example.com/?session_id=abc')).toBeNull();
+        expect(canonicalizeBadgeUrl('https://example.com/?signature=abc')).toBeNull();
+    });
+
+    it('strips auth aliases the backend removes from public URL identity', () => {
+        expect(canonicalizeBadgeUrl('https://example.com/?ref=mail&key=abc&item=1')).toBe(
+            'https://example.com/?item=1',
+        );
     });
 });
 
@@ -56,6 +68,106 @@ describe('parseApiResponse', () => {
                     cleaner_than: 50,
                 },
                 { requestedUrl: requested },
+            ),
+        ).toBeNull();
+    });
+
+    it('trusts snapshot identity over the embedding page URL', () => {
+        const data = parseApiResponse(
+            {
+                url: 'https://example.com/published-home',
+                public_id: 'abcdef0123',
+                co2_grams: 0.2,
+                measurement_source: 'published_snapshot',
+                status: 'ready',
+                measured_at: '2026-09-22T10:00:00.000Z',
+                valid_until: '2026-10-22T10:00:00.000Z',
+            },
+            {
+                requestedUrl: 'https://example.com/blog/article',
+                requestedSnapshotId: 'ABCDEF0123',
+            },
+        );
+
+        expect(data?.publicId).toBe('abcdef0123');
+        expect(data?.url).toBe('https://example.com/published-home');
+    });
+
+    it('rejects a snapshot response that is not marked as a published snapshot', () => {
+        expect(
+            parseApiResponse(
+                {
+                    public_id: 'abcdef0123',
+                    co2_grams: 0.2,
+                    measurement_source: 'api',
+                },
+                {
+                    requestedUrl: requested,
+                    requestedSnapshotId: 'abcdef0123',
+                },
+            ),
+        ).toBeNull();
+    });
+
+    it('rejects scan aliases and partial status on the snapshot endpoint', () => {
+        expect(
+            parseApiResponse(
+                {
+                    public_id: 'abcdef0123',
+                    co2_grams: 0.2,
+                    measurement_source: 'cometweb_scan',
+                    status: 'ready',
+                    measured_at: '2026-09-22T10:00:00.000Z',
+                    valid_until: '2026-10-22T10:00:00.000Z',
+                },
+                { requestedUrl: requested, requestedSnapshotId: 'abcdef0123' },
+            ),
+        ).toBeNull();
+        expect(
+            parseApiResponse(
+                {
+                    public_id: 'abcdef0123',
+                    co2_grams: 0.2,
+                    measurement_source: 'published_snapshot',
+                    status: 'partial',
+                    measured_at: '2026-09-22T10:00:00.000Z',
+                    valid_until: '2026-10-22T10:00:00.000Z',
+                },
+                { requestedUrl: requested, requestedSnapshotId: 'abcdef0123' },
+            ),
+        ).toBeNull();
+    });
+
+    it('rejects unsupported runtime statuses instead of treating them as ready', () => {
+        expect(
+            parseApiResponse(
+                { url: requested, co2_grams: 0.2, status: 'error' as never },
+                { requestedUrl: requested },
+            ),
+        ).toBeNull();
+        expect(
+            parseApiResponse(
+                { url: requested, co2_grams: 0.2, status: 'ok' as never },
+                { requestedUrl: requested },
+            )?.status,
+        ).toBe('ready');
+    });
+
+    it('rejects a malformed snapshot freshness deadline', () => {
+        expect(
+            parseApiResponse(
+                {
+                    public_id: 'abcdef0123',
+                    co2_grams: 0.2,
+                    measurement_source: 'published_snapshot',
+                    status: 'ready',
+                    measured_at: '2026-09-22T10:00:00.000Z',
+                    valid_until: 'not-a-date',
+                },
+                {
+                    requestedUrl: requested,
+                    requestedSnapshotId: 'abcdef0123',
+                },
             ),
         ).toBeNull();
     });
@@ -87,12 +199,41 @@ describe('parseApiResponse', () => {
         );
         expect(data!.cleanerThan).toBeNull();
     });
+
+    it('rejects revoked and unknown responses', () => {
+        expect(
+            parseApiResponse(
+                { url: requested, co2_grams: 0.2, status: 'revoked' },
+                { requestedUrl: requested },
+            ),
+        ).toBeNull();
+        expect(
+            parseApiResponse(
+                { url: requested, co2_grams: 0.2, status: 'unknown' },
+                { requestedUrl: requested },
+            ),
+        ).toBeNull();
+    });
+
+    it('marks an expired measurement stale and preserves missing formula provenance', () => {
+        const data = parseApiResponse(
+            {
+                url: requested,
+                co2_grams: 0.2,
+                valid_until: '2026-09-21T00:00:00.000Z',
+            },
+            { requestedUrl: requested, now: Date.parse('2026-09-22T00:00:00.000Z') },
+        );
+        expect(data!.status).toBe('stale');
+        expect(data!.formulaId).toBeNull();
+    });
 });
 
 describe('normalizeBadgeData', () => {
     it('forces unknown when co2Grams missing', () => {
         const out = normalizeBadgeData({
             url: 'https://example.com',
+            publicId: null,
             co2Grams: null,
             score: 'A+',
             cleanerThan: 50,
@@ -110,5 +251,27 @@ describe('normalizeBadgeData', () => {
         });
         expect(out!.score).toBeNull();
         expect(out!.status).toBe('unknown');
+    });
+
+    it('does not turn malformed cleanerThan into zero', () => {
+        const out = normalizeBadgeData({
+            url: 'https://example.com',
+            publicId: null,
+            co2Grams: 0.2,
+            score: 'A',
+            cleanerThan: Number.NaN,
+            pageWeightKb: null,
+            greenHost: null,
+            verified: false,
+            timestamp: 1,
+            status: 'ready',
+            source: 'api',
+            formulaId: null,
+            measurementMethod: null,
+            measuredAt: null,
+            validUntil: null,
+            evidenceUrl: null,
+        });
+        expect(out!.cleanerThan).toBeNull();
     });
 });

@@ -1,5 +1,5 @@
 /**
- * @cometweb/carbon-badge — localStorage caching layer (schema v2)
+ * @cometweb/carbon-badge — localStorage caching layer (schema v3)
  *
  * Key includes canonical URL, mode, api-url hash, green-host, and schema version
  * so attribute changes never silently reuse a stale measurement.
@@ -8,8 +8,8 @@
 import type { BadgeData, CacheEntry, CacheKeyParts } from './types';
 import { BADGE_CACHE_SCHEMA } from './types';
 
-const CACHE_PREFIX = 'cwb:v2:';
-/** Legacy prefix from 1.0.x — cleared on cleanup. */
+const CACHE_PREFIX = 'cwb:v3:';
+/** Legacy prefix from pre-v3 schemas — cleared on cleanup. */
 const LEGACY_PREFIX = 'cwb:';
 
 function hashApiUrl(apiUrl: string): string {
@@ -27,6 +27,7 @@ export function buildCacheKey(parts: CacheKeyParts): string {
         CACHE_PREFIX +
         [
             parts.canonicalUrl,
+            parts.snapshotId?.trim().toLowerCase() || '',
             parts.mode,
             hashApiUrl(parts.apiUrl),
             green,
@@ -48,25 +49,39 @@ export function getCached(key: string): BadgeData | null {
     }
 }
 
-export function isCacheValid(key: string, ttlMinutes: number): boolean {
+export function isCacheValid(key: string): boolean {
     try {
         const raw = localStorage.getItem(key);
         if (!raw) return false;
 
         const entry: CacheEntry = JSON.parse(raw);
         if (entry.schema !== BADGE_CACHE_SCHEMA) return false;
-        const ageMs = Date.now() - entry.ts;
-        return ageMs < ttlMinutes * 60 * 1000;
+        if (!Number.isFinite(entry.ts) || !Number.isFinite(entry.expiresAt)) return false;
+        if (entry.ts > Date.now() || entry.expiresAt <= Date.now()) return false;
+        if (
+            entry.data?.status === 'stale' ||
+            entry.data?.status === 'unknown' ||
+            entry.data?.status === 'revoked'
+        ) {
+            return false;
+        }
+        return true;
     } catch {
         return false;
     }
 }
 
-export function setCache(key: string, data: BadgeData): void {
+export function setCache(key: string, data: BadgeData, ttlMinutes: number): void {
     try {
+        const now = Date.now();
+        const localExpiry = now + ttlMinutes * 60 * 1000;
+        const serverExpiry = data.validUntil ? Date.parse(data.validUntil) : Number.NaN;
         const entry: CacheEntry = {
             data,
-            ts: Date.now(),
+            ts: now,
+            expiresAt: Number.isFinite(serverExpiry)
+                ? Math.min(localExpiry, serverExpiry)
+                : localExpiry,
             schema: BADGE_CACHE_SCHEMA,
         };
         localStorage.setItem(key, JSON.stringify(entry));
@@ -78,10 +93,9 @@ export function setCache(key: string, data: BadgeData): void {
     }
 }
 
-export function clearExpired(ttlMinutes: number): void {
+export function clearExpired(): void {
     try {
         const now = Date.now();
-        const maxAge = ttlMinutes * 60 * 1000;
 
         for (let i = localStorage.length - 1; i >= 0; i--) {
             const key = localStorage.key(i);
@@ -102,7 +116,10 @@ export function clearExpired(ttlMinutes: number): void {
                 const entry: CacheEntry = JSON.parse(raw);
                 if (
                     entry.schema !== BADGE_CACHE_SCHEMA ||
-                    now - entry.ts > maxAge
+                    !Number.isFinite(entry.ts) ||
+                    !Number.isFinite(entry.expiresAt) ||
+                    entry.ts > now ||
+                    entry.expiresAt <= now
                 ) {
                     localStorage.removeItem(key);
                 }

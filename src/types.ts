@@ -19,6 +19,7 @@ export type MeasurementSource =
 
 export interface BadgeData {
     url: string;
+    publicId: string | null;
     /** Finite CO₂e grams when measured; null when unknown / N/D. */
     co2Grams: number | null;
     /** Letter only when co2Grams is a finite measurement. */
@@ -27,7 +28,7 @@ export interface BadgeData {
     cleanerThan: number | null;
     pageWeightKb: number | null;
     greenHost: boolean | null;
-    /** True only when embed origin matches the measured URL (API verification). */
+    /** Backend verification signal; rendering also requires fresh allowlisted evidence. */
     verified: boolean;
     timestamp: number;
     status: MeasurementStatus;
@@ -37,30 +38,36 @@ export interface BadgeData {
     measuredAt: string | null;
     validUntil: string | null;
     evidenceUrl: string | null;
-    /** True when local estimate used a hard-coded weight fallback (not a real measurement). */
+    /** True when local estimate is partial or unavailable. */
     estimatePartial?: boolean;
+    measuredResourceCount?: number;
+    unknownResourceCount?: number;
+    coverageRatio?: number;
 }
 
 export type ScoreLetter = 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
 
 export type BadgeTheme = 'dark' | 'light';
 
-export type BadgeMode = 'api' | 'estimate';
+export type BadgeMode = 'snapshot' | 'api' | 'estimate';
 
 export interface CacheEntry {
     data: BadgeData;
     ts: number;
+    expiresAt: number;
     schema: number;
 }
 
 export interface CacheKeyParts {
     canonicalUrl: string;
+    snapshotId: string | null;
     mode: BadgeMode;
     apiUrl: string;
     greenHost: boolean;
 }
 
 export interface APIResponse {
+    public_id?: string;
     url?: string;
     co2_grams?: number | null;
     score?: string | null;
@@ -84,6 +91,6 @@ export interface APIResponse {
     benchmark?: number | null;
 }
 
-export const BADGE_CACHE_SCHEMA = 2;
-export const FORMULA_ID_SWDM_V4_LITE = 'swdm-v4-lite';
+export const BADGE_CACHE_SCHEMA = 3;
+export const FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1 = 'swdm-v4-lite-first-load-v1';
 export const FORMULA_ID_TRANSFER_V2 = 'cometweb_scan_transfer_v2';

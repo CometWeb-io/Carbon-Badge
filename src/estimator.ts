@@ -1,5 +1,5 @@
 /**
- * @cometweb/carbon-badge — Client-side SWDM v4 Lite Estimator
+ * @cometweb/carbon-badge — Client-side SWDM v4 first-load Lite Estimator
  *
  * Uses PerformanceObserver / Resource Timing API to measure actual page weight,
  * then applies a simplified SWDM v4 formula to estimate CO₂e per page view.
@@ -12,22 +12,27 @@
  */
 
 import type { BadgeData, ScoreLetter } from './types';
-import { FORMULA_ID_SWDM_V4_LITE } from './types';
+import { FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1 } from './types';
 
-const ENERGY_DC = 0.055;
-const ENERGY_NET_MIXED = 0.071;
-const ENERGY_USER = 0.080;
-const ENERGY_EMBODIED = 0.106;
+const OPERATIONAL_DC_KWH_PER_GB = 0.055;
+const OPERATIONAL_NETWORK_KWH_PER_GB = 0.059;
+const OPERATIONAL_USER_KWH_PER_GB = 0.080;
+const EMBODIED_DC_KWH_PER_GB = 0.012;
+const EMBODIED_NETWORK_KWH_PER_GB = 0.013;
+const EMBODIED_USER_KWH_PER_GB = 0.081;
 const CI_GLOBAL = 494;
-/** GiB (1024³) — SWDM transfer base. */
-const BYTES_PER_GIB = 1024 * 1024 * 1024;
+/** SWDM uses decimal GB, not GiB. */
+const BYTES_PER_GB = 1_000_000_000;
 
 export interface EstimateResult {
     data: BadgeData;
     /** Bytes used for the formula (0 when unknown). */
     pageWeightBytes: number;
-    /** True when weight came from a hard-coded fallback, not timing/DOM. */
+    /** True when weight is partial or came from DOM estimation. */
     partial: boolean;
+    measuredResourceCount: number;
+    unknownResourceCount: number;
+    coverageRatio: number;
 }
 
 /**
@@ -41,53 +46,74 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
     const measured = measurePageWeight();
     const pageWeightBytes = measured.bytes;
     const partial = measured.partial;
-    const pageWeightKb = pageWeightBytes / 1024;
-    const dataTransferGib = pageWeightBytes / BYTES_PER_GIB;
+    const pageWeightKb = pageWeightBytes > 0 ? pageWeightBytes / 1024 : null;
+    const dataTransferGb = pageWeightBytes / BYTES_PER_GB;
 
     const greenFactor = greenHost ? 0.3 : 1.0;
 
-    const co2Dc = dataTransferGib * ENERGY_DC * CI_GLOBAL * greenFactor;
-    const co2Net = dataTransferGib * ENERGY_NET_MIXED * CI_GLOBAL;
-    const co2User = dataTransferGib * ENERGY_USER * CI_GLOBAL;
-    const co2Embodied = dataTransferGib * ENERGY_EMBODIED * CI_GLOBAL;
+    const operationalKwhPerGb =
+        OPERATIONAL_DC_KWH_PER_GB * greenFactor +
+        OPERATIONAL_NETWORK_KWH_PER_GB +
+        OPERATIONAL_USER_KWH_PER_GB;
+    const embodiedKwhPerGb =
+        EMBODIED_DC_KWH_PER_GB +
+        EMBODIED_NETWORK_KWH_PER_GB +
+        EMBODIED_USER_KWH_PER_GB;
 
-    const totalCo2 = co2Dc + co2Net + co2User + co2Embodied;
-    const score = co2ToScore(totalCo2);
+    const totalCo2 =
+        pageWeightBytes > 0
+            ? dataTransferGb * (operationalKwhPerGb + embodiedKwhPerGb) * CI_GLOBAL
+            : null;
+    const score = totalCo2 === null ? null : co2ToScore(totalCo2);
     const href =
         typeof location !== 'undefined' && location.href ? location.href : '';
 
     const data: BadgeData = {
         url: href,
-        co2Grams: Math.round(totalCo2 * 10000) / 10000,
+        publicId: null,
+        co2Grams: totalCo2 === null ? null : Math.round(totalCo2 * 10000) / 10000,
         score,
         // Local lite estimate has no cohort benchmark — never invent "% of web".
         cleanerThan: null,
-        pageWeightKb: Math.round(pageWeightKb),
+        pageWeightKb: pageWeightKb === null ? null : Math.round(pageWeightKb),
         greenHost,
         verified: false,
         timestamp: Date.now(),
-        status: partial ? 'partial' : 'ready',
+        status: totalCo2 === null ? 'unknown' : partial ? 'partial' : 'ready',
         source: 'estimate',
-        formulaId: FORMULA_ID_SWDM_V4_LITE,
-        measurementMethod: 'resource_timing_lite',
-        measuredAt: new Date().toISOString(),
+        formulaId: totalCo2 === null ? null : FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1,
+        measurementMethod: totalCo2 === null ? null : 'resource_timing_lite',
+        measuredAt: totalCo2 === null ? null : new Date().toISOString(),
         validUntil: null,
         evidenceUrl: null,
-        estimatePartial: partial,
+        estimatePartial: partial || totalCo2 === null,
+        measuredResourceCount: measured.measuredResourceCount,
+        unknownResourceCount: measured.unknownResourceCount,
+        coverageRatio: measured.coverageRatio,
     };
 
-    return { data, pageWeightBytes, partial };
+    return {
+        data,
+        pageWeightBytes,
+        partial,
+        measuredResourceCount: measured.measuredResourceCount,
+        unknownResourceCount: measured.unknownResourceCount,
+        coverageRatio: measured.coverageRatio,
+    };
 }
 
 interface WeightMeasure {
     bytes: number;
     partial: boolean;
+    measuredResourceCount: number;
+    unknownResourceCount: number;
+    coverageRatio: number;
 }
 
 /**
  * Measure total page weight using Performance Resource Timing API.
- * Falls back to document size estimation if API is unavailable.
- * Hard-coded 500 KiB is marked partial (not a confident measurement).
+ * Falls back to document size estimation if API is unavailable. The DOM path
+ * is explicitly partial; when neither source is available, the result is N/D.
  */
 function measurePageWeight(): WeightMeasure {
     try {
@@ -100,16 +126,34 @@ function measurePageWeight(): WeightMeasure {
             ) as PerformanceNavigationTiming[];
 
             let total = 0;
+            let measuredResourceCount = 0;
+            let unknownResourceCount = 0;
+            const entries = [
+                ...navigation.slice(0, 1),
+                ...resources,
+            ];
 
-            if (navigation.length > 0) {
-                const nav = navigation[0];
-                total += nav.transferSize || nav.encodedBodySize || 0;
-            }
-            for (const res of resources) {
-                total += res.transferSize || res.encodedBodySize || 0;
+            for (const entry of entries) {
+                const bytes = entry.transferSize || entry.encodedBodySize || 0;
+                if (bytes > 0) {
+                    total += bytes;
+                    measuredResourceCount++;
+                } else {
+                    unknownResourceCount++;
+                }
             }
 
-            if (total > 0) return { bytes: total, partial: false };
+            if (total > 0) {
+                const entryCount = measuredResourceCount + unknownResourceCount;
+                return {
+                    bytes: total,
+                    partial: unknownResourceCount > 0,
+                    measuredResourceCount,
+                    unknownResourceCount,
+                    coverageRatio:
+                        entryCount > 0 ? measuredResourceCount / entryCount : 0,
+                };
+            }
         }
     } catch {
         console.warn(
@@ -120,15 +164,27 @@ function measurePageWeight(): WeightMeasure {
     try {
         const html = document.documentElement?.outerHTML || '';
         if (html.length > 0) {
-            return { bytes: html.length * 1.3, partial: true };
+            return {
+                bytes: html.length * 1.3,
+                partial: true,
+                measuredResourceCount: 0,
+                unknownResourceCount: 0,
+                coverageRatio: 0,
+            };
         }
     } catch {
         console.warn(
-            '[CometWeb Carbon Badge] DOM size estimation failed, using default 500KB fallback.',
+            '[CometWeb Carbon Badge] DOM size estimation unavailable.',
         );
     }
 
-    return { bytes: 500 * 1024, partial: true };
+    return {
+        bytes: 0,
+        partial: true,
+        measuredResourceCount: 0,
+        unknownResourceCount: 0,
+        coverageRatio: 0,
+    };
 }
 
 /**

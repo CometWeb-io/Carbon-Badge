@@ -1,60 +1,37 @@
 /**
- * Tests for pure utility functions extracted from badge.ts
- * These are copied here to test in isolation (they're not exported from badge.ts).
+ * Tests for the production pure utility functions.
  */
 import { describe, it, expect } from 'vitest';
 import { co2ToScore } from '../estimator';
+import { clamp, escapeHtml, toFiniteNumberOrNull } from '../utils';
 
-// --- Inline the private helpers so we can test them without exporting ---
+// --- toFiniteNumberOrNull ---
 
-function toFiniteNumber(value: unknown, fallback: number): number {
-    const n = typeof value === 'number' ? value : Number(value);
-    return Number.isFinite(n) ? n : fallback;
-}
-
-function clamp(value: number, min: number, max: number): number {
-    return Math.min(max, Math.max(min, value));
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/\"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-// --- toFiniteNumber ---
-
-describe('toFiniteNumber', () => {
+describe('toFiniteNumberOrNull', () => {
     it('returns the number unchanged when finite', () => {
-        expect(toFiniteNumber(1.5, 0)).toBe(1.5);
-        expect(toFiniteNumber(0, 99)).toBe(0);
-        expect(toFiniteNumber(-5, 0)).toBe(-5);
+        expect(toFiniteNumberOrNull(1.5)).toBe(1.5);
+        expect(toFiniteNumberOrNull(0)).toBe(0);
+        expect(toFiniteNumberOrNull(-5)).toBe(-5);
     });
 
     it('parses a numeric string', () => {
-        expect(toFiniteNumber('3.14', 0)).toBe(3.14);
+        expect(toFiniteNumberOrNull('3.14')).toBe(3.14);
     });
 
-    it('returns fallback for NaN', () => {
-        expect(toFiniteNumber(NaN, 42)).toBe(42);
-        expect(toFiniteNumber('abc', 42)).toBe(42);
+    it('returns null for NaN', () => {
+        expect(toFiniteNumberOrNull(NaN)).toBeNull();
+        expect(toFiniteNumberOrNull('abc')).toBeNull();
     });
 
-    it('returns fallback for Infinity', () => {
-        expect(toFiniteNumber(Infinity, 0)).toBe(0);
-        expect(toFiniteNumber(-Infinity, 0)).toBe(0);
+    it('returns null for Infinity', () => {
+        expect(toFiniteNumberOrNull(Infinity)).toBeNull();
+        expect(toFiniteNumberOrNull(-Infinity)).toBeNull();
     });
 
-    it('returns fallback for non-numeric objects', () => {
-        // Number(null) === 0 (finite) — returns 0, not fallback
-        expect(toFiniteNumber(null, 7)).toBe(0);
-        // Number(undefined) === NaN — returns fallback
-        expect(toFiniteNumber(undefined, 7)).toBe(7);
-        // Number({}) === NaN — returns fallback
-        expect(toFiniteNumber({}, 7)).toBe(7);
+    it('returns null for missing or non-numeric values', () => {
+        expect(toFiniteNumberOrNull(null)).toBeNull();
+        expect(toFiniteNumberOrNull(undefined)).toBeNull();
+        expect(toFiniteNumberOrNull({})).toBeNull();
     });
 });
 

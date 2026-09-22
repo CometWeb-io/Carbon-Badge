@@ -17,13 +17,26 @@ test.describe('carbon badge lifecycle (CB-29)', () => {
       return !!root && (root.textContent || '').trim().length > 0;
     });
 
-    const text = await page.evaluate(() => {
+    const state = await page.evaluate(() => {
       const host = document.querySelector('cometweb-carbon-badge');
-      return host?.shadowRoot?.textContent || '';
+      const badge = host as any;
+      return {
+        text: host?.shadowRoot?.textContent || '',
+        score: badge?.score ?? null,
+        co2Grams: badge?.co2Grams ?? null,
+        status: badge?.measurementStatus ?? null,
+      };
     });
 
-    // Fail-closed: unknown/empty must never paint a lone invented A+.
-    expect(text.includes('N/D') || /\d/.test(text)).toBeTruthy();
+    expect(state.status).toMatch(/^(ready|partial|unknown)$/);
+    if (state.status === 'unknown') {
+      expect(state.score).toBeNull();
+      expect(state.co2Grams).toBeNull();
+      expect(state.text).toContain('N/D');
+    } else {
+      expect(state.score).toMatch(/^(A\+|A|B|C|D|F)$/);
+      expect(state.co2Grams).toEqual(expect.any(Number));
+    }
 
     const isCe = await page.evaluate(() => {
       const host = document.querySelector('cometweb-carbon-badge');
