@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="390" viewBox="0 0 1200 390" role="img" aria-labelledby="title desc">
+<title id="title">Carbon Badge workflow</title><desc id="desc">Read page data. Calculate an estimate. Display the status. Missing data never becomes a made-up grade.</desc>
+<rect width="1200" height="390" rx="20" fill="#f7faf9"/>
+<g font-family="Nunito Sans, Arial, sans-serif" fill="#18181b">
+<text x="44" y="65" font-size="38" font-weight="700">Carbon Badge</text>
+<text x="44" y="104" font-size="23" fill="#4b5563">Show the estimate. Keep its status visible.</text>
+<rect x="44" y="150" width="348" height="139" rx="14" fill="#ffffff" stroke="#d6dfdc"/>
+<text x="66" y="181" font-size="17" fill="#034c32" font-weight="700">01</text>
+<text x="66" y="220" font-size="25" font-weight="700">Read page data</text>
+<text x="66" y="259" font-size="17" fill="#4b5563">Browser timing or API response</text>
+<path d="M401 219h18m-6-6 6 6-6 6" fill="none" stroke="#034c32" stroke-width="2"/>
+<rect x="426" y="150" width="348" height="139" rx="14" fill="#ffffff" stroke="#d6dfdc"/>
+<text x="448" y="181" font-size="17" fill="#034c32" font-weight="700">02</text>
+<text x="448" y="220" font-size="25" font-weight="700">Calculate an estimate</text>
+<text x="448" y="259" font-size="17" fill="#4b5563">Method and coverage matter</text>
+<path d="M783 219h18m-6-6 6 6-6 6" fill="none" stroke="#034c32" stroke-width="2"/>
+<rect x="808" y="150" width="348" height="139" rx="14" fill="#ffffff" stroke="#d6dfdc"/>
+<text x="830" y="181" font-size="17" fill="#034c32" font-weight="700">03</text>
+<text x="830" y="220" font-size="25" font-weight="700">Display the status</text>
+<text x="830" y="259" font-size="17" fill="#4b5563">Value, source or N/D</text>
+<text x="44" y="345" font-size="21" fill="#034c32">Missing data never becomes a made-up grade.</text>
+</g></svg>
