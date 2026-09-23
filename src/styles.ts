@@ -65,6 +65,7 @@ const BASE_STYLES = `
   }
   .cw-title small { font-size: 12px; font-weight: 400; color: #59665e; }
   .cw-subtitle { margin-top: 3px; font-size: 12px; color: #59665e; overflow-wrap: anywhere; }
+  .cw-score-model { margin-top: 4px; font-size: 10px; font-weight: 600; color: #4a5750; letter-spacing: 0.01em; }
   .cw-highlight { font-weight: 600; color: var(--cw-accent); }
   .cw-footer { margin-top: 7px; font-size: 10px; font-weight: 400; color: #66736a; line-height: 1.4; }
   .grade-aplus, .grade-a { background: #e0f3e8; color: #14613d; }

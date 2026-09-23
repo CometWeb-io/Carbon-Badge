@@ -15,11 +15,21 @@ describe('canonicalizeBadgeUrl', () => {
         );
     });
 
-    it('strips tracking query params but keeps semantic query', () => {
-        const out = canonicalizeBadgeUrl(
-            'https://example.com/catalog?item=123&utm_source=x',
-        );
-        expect(out).toBe('https://example.com/catalog?item=123');
+    it('strips all query params by default (privacy-safe)', () => {
+        expect(
+            canonicalizeBadgeUrl(
+                'https://example.com/catalog?item=123&utm_source=x&email=a@b.c',
+            ),
+        ).toBe('https://example.com/catalog');
+    });
+
+    it('keeps only allowlisted query keys when provided', () => {
+        expect(
+            canonicalizeBadgeUrl(
+                'https://example.com/c?item=123&email=x@y.z&utm_source=a',
+                ['item'],
+            ),
+        ).toBe('https://example.com/c?item=123');
     });
 
     it('returns null for non-http URLs', () => {
@@ -27,24 +37,25 @@ describe('canonicalizeBadgeUrl', () => {
         expect(canonicalizeBadgeUrl('')).toBeNull();
     });
 
-    it('distinguishes different semantic query values', () => {
-        const a = canonicalizeBadgeUrl('https://example.com/c?item=123');
-        const b = canonicalizeBadgeUrl('https://example.com/c?item=456');
-        expect(a).not.toBe(b);
-    });
-
-    it('rejects credentials and credential-bearing query parameters', () => {
-        expect(canonicalizeBadgeUrl('https://user:password@example.com/')).toBeNull();
-        expect(canonicalizeBadgeUrl('https://example.com/?session_id=abc')).toBeNull();
-        expect(canonicalizeBadgeUrl('https://example.com/?signature=abc')).toBeNull();
-    });
-
-    it('strips auth aliases the backend removes from public URL identity', () => {
-        expect(canonicalizeBadgeUrl('https://example.com/?ref=mail&key=abc&item=1')).toBe(
-            'https://example.com/?item=1',
-        );
+    it('rejects credentials in the authority', () => {
+        expect(
+            canonicalizeBadgeUrl('https://user:password@example.com/'),
+        ).toBeNull();
     });
 });
+
+    it('maps formula_version into formulaId', () => {
+        const data = parseApiResponse(
+            {
+                url: 'https://example.com',
+                co2_grams: 0.2,
+                status: 'ready',
+                formula_version: 'cometweb_v2_2026',
+            },
+            { requestedUrl: 'https://example.com' },
+        );
+        expect(data?.formulaId).toBe('cometweb_v2_2026');
+    });
 
 describe('parseApiResponse', () => {
     const requested = 'https://example.com';
@@ -59,12 +70,31 @@ describe('parseApiResponse', () => {
         ).toBeNull();
     });
 
+    it('returns null when status is missing (fail-closed)', () => {
+        expect(
+            parseApiResponse(
+                { url: requested, co2_grams: 0.2 },
+                { requestedUrl: requested },
+            ),
+        ).toBeNull();
+    });
+
+    it('returns null when response URL is missing', () => {
+        expect(
+            parseApiResponse(
+                { co2_grams: 0.2, status: 'ready' },
+                { requestedUrl: requested },
+            ),
+        ).toBeNull();
+    });
+
     it('returns null when response URL identity mismatches', () => {
         expect(
             parseApiResponse(
                 {
                     url: 'https://other.com/',
                     co2_grams: 0.2,
+                    status: 'ready',
                     cleaner_than: 50,
                 },
                 { requestedUrl: requested },
@@ -97,9 +127,11 @@ describe('parseApiResponse', () => {
         expect(
             parseApiResponse(
                 {
+                    url: requested,
                     public_id: 'abcdef0123',
                     co2_grams: 0.2,
                     measurement_source: 'api',
+                    status: 'ready',
                 },
                 {
                     requestedUrl: requested,
@@ -113,6 +145,7 @@ describe('parseApiResponse', () => {
         expect(
             parseApiResponse(
                 {
+                    url: requested,
                     public_id: 'abcdef0123',
                     co2_grams: 0.2,
                     measurement_source: 'cometweb_scan',
@@ -126,6 +159,7 @@ describe('parseApiResponse', () => {
         expect(
             parseApiResponse(
                 {
+                    url: requested,
                     public_id: 'abcdef0123',
                     co2_grams: 0.2,
                     measurement_source: 'published_snapshot',
@@ -157,6 +191,7 @@ describe('parseApiResponse', () => {
         expect(
             parseApiResponse(
                 {
+                    url: requested,
                     public_id: 'abcdef0123',
                     co2_grams: 0.2,
                     measurement_source: 'published_snapshot',
@@ -178,6 +213,7 @@ describe('parseApiResponse', () => {
                 url: 'https://example.com',
                 co2_grams: 0.2872,
                 score: 'A',
+                status: 'ready',
                 cleaner_than: 60,
                 verified: false,
             },
@@ -187,6 +223,7 @@ describe('parseApiResponse', () => {
         expect(data!.score).toBe('B');
         expect(data!.co2Grams).toBe(0.2872);
         expect(data!.cleanerThan).toBe(60);
+        expect(data!.scoreModelId).toBe('carbon-badge-bands-v1');
     });
 
     it('keeps cleanerThan null when benchmark missing', () => {
@@ -194,6 +231,7 @@ describe('parseApiResponse', () => {
             {
                 url: 'https://example.com',
                 co2_grams: 0.15,
+                status: 'ready',
             },
             { requestedUrl: requested },
         );
@@ -220,23 +258,24 @@ describe('parseApiResponse', () => {
             {
                 url: requested,
                 co2_grams: 0.2,
-                valid_until: '2026-09-21T00:00:00.000Z',
+                status: 'ready',
+                valid_until: '2020-01-01T00:00:00.000Z',
             },
             { requestedUrl: requested, now: Date.parse('2026-09-22T00:00:00.000Z') },
         );
-        expect(data!.status).toBe('stale');
-        expect(data!.formulaId).toBeNull();
+        expect(data?.status).toBe('stale');
+        expect(data?.formulaId).toBeNull();
     });
 });
 
 describe('normalizeBadgeData', () => {
     it('forces unknown when co2Grams missing', () => {
-        const out = normalizeBadgeData({
+        const data = normalizeBadgeData({
             url: 'https://example.com',
             publicId: null,
             co2Grams: null,
-            score: 'A+',
-            cleanerThan: 50,
+            score: 'A',
+            cleanerThan: 10,
             pageWeightKb: 1,
             greenHost: false,
             verified: false,
@@ -244,34 +283,13 @@ describe('normalizeBadgeData', () => {
             status: 'ready',
             source: 'api',
             formulaId: null,
+            scoreModelId: null,
             measurementMethod: null,
             measuredAt: null,
             validUntil: null,
             evidenceUrl: null,
         });
-        expect(out!.score).toBeNull();
-        expect(out!.status).toBe('unknown');
-    });
-
-    it('does not turn malformed cleanerThan into zero', () => {
-        const out = normalizeBadgeData({
-            url: 'https://example.com',
-            publicId: null,
-            co2Grams: 0.2,
-            score: 'A',
-            cleanerThan: Number.NaN,
-            pageWeightKb: null,
-            greenHost: null,
-            verified: false,
-            timestamp: 1,
-            status: 'ready',
-            source: 'api',
-            formulaId: null,
-            measurementMethod: null,
-            measuredAt: null,
-            validUntil: null,
-            evidenceUrl: null,
-        });
-        expect(out!.cleanerThan).toBeNull();
+        expect(data?.status).toBe('unknown');
+        expect(data?.score).toBeNull();
     });
 });

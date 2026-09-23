@@ -1,5 +1,5 @@
 /**
- * @cometweb/carbon-badge — localStorage caching layer (schema v3)
+ * @cometweb/carbon-badge — localStorage caching layer (schema v4)
  *
  * Key includes canonical URL, mode, api-url hash, green-host, and schema version
  * so attribute changes never silently reuse a stale measurement.
@@ -8,9 +8,16 @@
 import type { BadgeData, CacheEntry, CacheKeyParts } from './types';
 import { BADGE_CACHE_SCHEMA } from './types';
 
-const CACHE_PREFIX = 'cwb:v3:';
-/** Legacy prefix from pre-v3 schemas — cleared on cleanup. */
-const LEGACY_PREFIX = 'cwb:';
+const CACHE_PREFIX = `cometweb:carbon-badge:v${BADGE_CACHE_SCHEMA}:`;
+/** Owned legacy prefixes only — never wipe arbitrary `cwb:` host keys. */
+const OWNED_LEGACY_PREFIXES = [
+    'cometweb:carbon-badge:v3:',
+    'cometweb:carbon-badge:v2:',
+    'cwb:v3:',
+    'cwb:v2:',
+] as const;
+
+let cleanupPerformed = false;
 
 function hashApiUrl(apiUrl: string): string {
     let h = 0;
@@ -19,6 +26,10 @@ function hashApiUrl(apiUrl: string): string {
         h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
     }
     return (h >>> 0).toString(36);
+}
+
+function isOwnedLegacyKey(key: string): boolean {
+    return OWNED_LEGACY_PREFIXES.some((prefix) => key.startsWith(prefix));
 }
 
 export function buildCacheKey(parts: CacheKeyParts): string {
@@ -56,7 +67,9 @@ export function isCacheValid(key: string): boolean {
 
         const entry: CacheEntry = JSON.parse(raw);
         if (entry.schema !== BADGE_CACHE_SCHEMA) return false;
-        if (!Number.isFinite(entry.ts) || !Number.isFinite(entry.expiresAt)) return false;
+        if (!Number.isFinite(entry.ts) || !Number.isFinite(entry.expiresAt)) {
+            return false;
+        }
         if (entry.ts > Date.now() || entry.expiresAt <= Date.now()) return false;
         if (
             entry.data?.status === 'stale' ||
@@ -71,11 +84,17 @@ export function isCacheValid(key: string): boolean {
     }
 }
 
-export function setCache(key: string, data: BadgeData, ttlMinutes: number): void {
+export function setCache(
+    key: string,
+    data: BadgeData,
+    ttlMinutes: number,
+): void {
     try {
         const now = Date.now();
         const localExpiry = now + ttlMinutes * 60 * 1000;
-        const serverExpiry = data.validUntil ? Date.parse(data.validUntil) : Number.NaN;
+        const serverExpiry = data.validUntil
+            ? Date.parse(data.validUntil)
+            : Number.NaN;
         const entry: CacheEntry = {
             data,
             ts: now,
@@ -100,11 +119,11 @@ export function clearExpired(): void {
         for (let i = localStorage.length - 1; i >= 0; i--) {
             const key = localStorage.key(i);
             if (!key) continue;
-            if (!key.startsWith(CACHE_PREFIX) && !key.startsWith(LEGACY_PREFIX)) {
-                continue;
-            }
-            // Drop all legacy v1 keys
-            if (key.startsWith(LEGACY_PREFIX) && !key.startsWith(CACHE_PREFIX)) {
+            const isCurrent = key.startsWith(CACHE_PREFIX);
+            const isLegacy = isOwnedLegacyKey(key);
+            if (!isCurrent && !isLegacy) continue;
+
+            if (isLegacy && !isCurrent) {
                 localStorage.removeItem(key);
                 continue;
             }
@@ -130,4 +149,16 @@ export function clearExpired(): void {
     } catch (e) {
         console.warn('[CometWeb Carbon Badge] Cache cleanup failed:', e);
     }
+}
+
+/** Run localStorage cleanup at most once per module lifetime. */
+export function clearExpiredOnce(): void {
+    if (cleanupPerformed) return;
+    cleanupPerformed = true;
+    clearExpired();
+}
+
+/** Test helper. */
+export function resetCleanupFlag(): void {
+    cleanupPerformed = false;
 }

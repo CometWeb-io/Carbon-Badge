@@ -257,7 +257,7 @@ describe('API response validation', () => {
                             url: 'https://example.com/stale',
                             co2_grams: 0.15,
                             verified: true,
-                            evidence_url: 'https://cometweb.io/evidence/example',
+                            evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
                             valid_until: '2020-01-01T00:00:00.000Z',
                         }),
                     ),
@@ -276,19 +276,32 @@ describe('API response validation', () => {
         expect(el.shadowRoot?.innerHTML).not.toContain('Verified by CometWeb');
     });
 
-    it('does not send an api key to an arbitrary API origin', async () => {
-        const fetchMock = vi.fn().mockRejectedValue(new Error('should not fetch'));
+    it('ignores removed api-key / untrusted api-url attributes', async () => {
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: () =>
+                Promise.resolve(
+                    makeApiResponse({ url: 'https://example.com/secure' }),
+                ),
+        });
         vi.stubGlobal('fetch', fetchMock);
 
         const el = document.createElement(TAG) as any;
         el.setAttribute('url', 'https://example.com/secure');
         el.setAttribute('api-url', 'https://attacker.example/api');
-        el.setAttribute('api-key', 'publishable-token');
+        el.setAttribute('api-key', 'should-be-ignored');
         el.setAttribute('mode', 'api');
         document.body.appendChild(el);
 
-        await vi.waitFor(() => expect(el.score).toBeNull(), { timeout: 2000 });
-        expect(fetchMock).not.toHaveBeenCalled();
+        await vi.waitFor(() => expect(el.score).toBe('B'), { timeout: 2000 });
+        expect(fetchMock).toHaveBeenCalled();
+        const requestUrl = String(fetchMock.mock.calls[0][0]);
+        expect(requestUrl).toContain('https://app.cometweb.io/');
+        expect(requestUrl).not.toContain('attacker.example');
+        const init = fetchMock.mock.calls[0][1] as RequestInit | undefined;
+        expect(init?.headers).toEqual({ Accept: 'application/json' });
     });
 
     it('sends the full embed origin to the API', async () => {
@@ -359,7 +372,7 @@ describe('API response validation', () => {
                             measurement_source: 'published_snapshot',
                             measured_at: new Date(Date.now() - 60_000).toISOString(),
                             valid_until: new Date(Date.now() + 86_400_000).toISOString(),
-                            evidence_url: 'https://cometweb.io/evidence/example',
+                            evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
                         }),
                     ),
             }),
@@ -389,6 +402,7 @@ describe('API response validation', () => {
                     Promise.resolve({
                         url: 'https://example.com',
                         co2_grams: 0.2,
+                        status: 'ready',
                         page_weight_kb: 100,
                         green_host: false,
                     }),
@@ -470,7 +484,7 @@ describe('snapshot-first owner mode', () => {
         expect(String(fetchMock.mock.calls[0][0])).toContain(
             '/public/carbon-badge/id/abcdef0123',
         );
-        expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: 'no-store' });
+        expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: 'no-cache' });
         expect(el.badgeData.publicId).toBe('abcdef0123');
         expect(eventDetail).toMatchObject({
             mode: 'snapshot',
@@ -667,6 +681,7 @@ describe('estimate mode', () => {
             { timeout: 2000 },
         );
         expect(el.cleanerThan).toBeNull();
+        expect(el.shadowRoot?.innerHTML).not.toContain('of modelled cohort');
         expect(el.shadowRoot?.innerHTML).not.toContain('of web');
     });
 });

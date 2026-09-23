@@ -32,6 +32,10 @@ describe('toFiniteNumberOrNull', () => {
         expect(toFiniteNumberOrNull(null)).toBeNull();
         expect(toFiniteNumberOrNull(undefined)).toBeNull();
         expect(toFiniteNumberOrNull({})).toBeNull();
+        expect(toFiniteNumberOrNull(true)).toBeNull();
+        expect(toFiniteNumberOrNull(false)).toBeNull();
+        expect(toFiniteNumberOrNull([0.2])).toBeNull();
+        expect(toFiniteNumberOrNull('   ')).toBeNull();
     });
 });
 

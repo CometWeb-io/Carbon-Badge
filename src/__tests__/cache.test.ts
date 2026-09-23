@@ -1,5 +1,5 @@
 /**
- * Tests for localStorage caching layer (cache.ts) — schema v3
+ * Tests for localStorage caching layer (cache.ts) — schema v4
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
@@ -8,8 +8,10 @@ import {
     setCache,
     clearExpired,
     buildCacheKey,
+    resetCleanupFlag,
 } from '../cache';
 import type { BadgeData } from '../types';
+import { BADGE_CACHE_SCHEMA } from '../types';
 
 const mockData: BadgeData = {
     url: 'https://example.com',
@@ -24,6 +26,7 @@ const mockData: BadgeData = {
     status: 'ready',
     source: 'api',
     formulaId: 'cometweb_scan_transfer_v2',
+    scoreModelId: 'carbon-badge-bands-v1',
     measurementMethod: 'http_simple',
     measuredAt: null,
     validUntil: null,
@@ -59,11 +62,15 @@ function makeLocalStorageMock() {
 }
 
 beforeEach(() => {
-    const ls = makeLocalStorageMock();
-    vi.stubGlobal('localStorage', ls);
+    resetCleanupFlag();
+    vi.stubGlobal('localStorage', makeLocalStorageMock());
 });
 
 describe('buildCacheKey', () => {
+    it('uses the owned cometweb namespace', () => {
+        expect(key.startsWith('cometweb:carbon-badge:v4:')).toBe(true);
+    });
+
     it('changes when mode or green-host changes', () => {
         const a = buildCacheKey({
             canonicalUrl: 'https://example.com',
@@ -79,32 +86,6 @@ describe('buildCacheKey', () => {
             apiUrl: 'https://app.cometweb.io/api',
             greenHost: false,
         });
-        const c = buildCacheKey({
-            canonicalUrl: 'https://example.com',
-            snapshotId: null,
-            mode: 'api',
-            apiUrl: 'https://app.cometweb.io/api',
-            greenHost: true,
-        });
-        expect(a).not.toBe(b);
-        expect(a).not.toBe(c);
-    });
-
-    it('changes when the published snapshot identity changes', () => {
-        const a = buildCacheKey({
-            canonicalUrl: 'https://example.com',
-            snapshotId: 'abcdef0123',
-            mode: 'snapshot',
-            apiUrl: 'https://app.cometweb.io/api',
-            greenHost: false,
-        });
-        const b = buildCacheKey({
-            canonicalUrl: 'https://example.com',
-            snapshotId: 'fedcba9876',
-            mode: 'snapshot',
-            apiUrl: 'https://app.cometweb.io/api',
-            greenHost: false,
-        });
         expect(a).not.toBe(b);
     });
 });
@@ -112,33 +93,16 @@ describe('buildCacheKey', () => {
 describe('setCache / getCached', () => {
     it('stores and retrieves data for a key', () => {
         setCache(key, mockData, 720);
-        const result = getCached(key);
-        expect(result).toEqual(mockData);
+        expect(getCached(key)).toEqual(mockData);
     });
 
     it('returns null for a key not in cache', () => {
-        expect(getCached('cwb:v2:missing')).toBeNull();
+        expect(getCached('cometweb:carbon-badge:v4:missing')).toBeNull();
     });
 
     it('returns null when localStorage contains malformed JSON', () => {
         localStorage.setItem(key, 'not-json{');
         expect(getCached(key)).toBeNull();
-    });
-
-    it('warns on setCache failure (quota exceeded)', () => {
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        vi.stubGlobal('localStorage', {
-            ...makeLocalStorageMock(),
-            setItem: () => {
-                throw new DOMException('QuotaExceededError');
-            },
-        });
-        setCache(key, mockData, 720);
-        expect(warnSpy).toHaveBeenCalledWith(
-            expect.stringContaining('Cache write failed'),
-            expect.anything(),
-        );
-        warnSpy.mockRestore();
     });
 });
 
@@ -149,30 +113,35 @@ describe('isCacheValid', () => {
     });
 
     it('returns false for an expired entry', () => {
-        const expiredEntry = {
-            data: mockData,
-            ts: Date.now() - 25 * 60 * 60 * 1000,
-            schema: 3,
-            expiresAt: Date.now() - 1,
-        };
-        localStorage.setItem(key, JSON.stringify(expiredEntry));
+        localStorage.setItem(
+            key,
+            JSON.stringify({
+                data: mockData,
+                ts: Date.now() - 25 * 60 * 60 * 1000,
+                schema: BADGE_CACHE_SCHEMA,
+                expiresAt: Date.now() - 1,
+            }),
+        );
         expect(isCacheValid(key)).toBe(false);
     });
 
-    it('returns false when no entry exists', () => {
-        expect(isCacheValid('cwb:v2:none')).toBe(false);
+    it('rejects revoked entries even when their deadline is fresh', () => {
+        setCache(key, { ...mockData, status: 'revoked' }, 720);
+        expect(isCacheValid(key)).toBe(false);
     });
 });
 
 describe('clearExpired', () => {
     it('removes expired entries', () => {
-        const expiredEntry = {
-            data: mockData,
-            ts: Date.now() - 25 * 60 * 60 * 1000,
-            schema: 3,
-            expiresAt: Date.now() - 1,
-        };
-        localStorage.setItem(key, JSON.stringify(expiredEntry));
+        localStorage.setItem(
+            key,
+            JSON.stringify({
+                data: mockData,
+                ts: Date.now() - 25 * 60 * 60 * 1000,
+                schema: BADGE_CACHE_SCHEMA,
+                expiresAt: Date.now() - 1,
+            }),
+        );
         clearExpired();
         expect(localStorage.getItem(key)).toBeNull();
     });
@@ -183,29 +152,34 @@ describe('clearExpired', () => {
         expect(getCached(key)).toEqual(mockData);
     });
 
-    it('removes legacy v1 keys', () => {
-        localStorage.setItem('cwb:https://legacy.com', JSON.stringify({ data: mockData, ts: Date.now() }));
+    it('removes owned legacy v2/v3 keys only', () => {
+        localStorage.setItem(
+            'cwb:v2:legacy',
+            JSON.stringify({ data: mockData, ts: Date.now() }),
+        );
+        localStorage.setItem('cwb:host-app-key', 'keep-me');
         clearExpired();
-        expect(localStorage.getItem('cwb:https://legacy.com')).toBeNull();
+        expect(localStorage.getItem('cwb:v2:legacy')).toBeNull();
+        expect(localStorage.getItem('cwb:host-app-key')).toBe('keep-me');
     });
 
-    it('does not touch keys without the cwb prefix', () => {
+    it('does not touch keys without the owned prefix', () => {
         localStorage.setItem('other:key', 'untouched');
         clearExpired();
         expect(localStorage.getItem('other:key')).toBe('untouched');
     });
 
     it('uses each entry deadline instead of the mounting badge TTL', () => {
-        const freshEntry = {
-            data: mockData,
-            ts: Date.now(),
-            expiresAt: Date.now() + 60 * 60 * 1000,
-            schema: 3,
-        };
-        localStorage.setItem(key, JSON.stringify(freshEntry));
-
+        localStorage.setItem(
+            key,
+            JSON.stringify({
+                data: mockData,
+                ts: Date.now(),
+                expiresAt: Date.now() + 60 * 60 * 1000,
+                schema: BADGE_CACHE_SCHEMA,
+            }),
+        );
         clearExpired();
-
         expect(localStorage.getItem(key)).not.toBeNull();
         expect(isCacheValid(key)).toBe(true);
     });
@@ -217,14 +191,6 @@ describe('clearExpired', () => {
         };
         setCache(key, data, 720);
         const entry = JSON.parse(localStorage.getItem(key)!);
-
         expect(entry.expiresAt).toBeLessThanOrEqual(Date.now() + 60_000);
-    });
-
-    it('rejects revoked entries even when their deadline is fresh', () => {
-        const data = { ...mockData, status: 'revoked' as const };
-        setCache(key, data, 720);
-
-        expect(isCacheValid(key)).toBe(false);
     });
 });

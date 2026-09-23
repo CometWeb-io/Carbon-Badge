@@ -4,15 +4,35 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { estimateCO2, estimateCO2Detailed, co2ToScore } from '../estimator';
 
-// Silence expected fallback warnings
 beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
 
-// --- estimateCO2 ---
-
 describe('estimateCO2', () => {
     it('returns a BadgeData object with all required fields', () => {
+        vi.stubGlobal('performance', {
+            getEntriesByType: (type: string) => {
+                if (type === 'resource') {
+                    return [
+                        {
+                            transferSize: 300 * 1024,
+                            encodedBodySize: 300 * 1024,
+                        },
+                    ];
+                }
+                if (type === 'navigation') {
+                    return [
+                        {
+                            transferSize: 80 * 1024,
+                            encodedBodySize: 80 * 1024,
+                        },
+                    ];
+                }
+                return [];
+            },
+            now: () => Date.now(),
+        });
+
         const result = estimateCO2(false);
         expect(result).toMatchObject({
             url: expect.any(String),
@@ -23,26 +43,52 @@ describe('estimateCO2', () => {
             greenHost: false,
             timestamp: expect.any(Number),
             formulaId: 'swdm-v4-lite-first-load-v1',
+            scoreModelId: 'carbon-badge-bands-v1',
         });
     });
 
-    it('co2Grams is always >= 0', () => {
+    it('co2Grams is always >= 0 when measured', () => {
+        vi.stubGlobal('performance', {
+            getEntriesByType: (type: string) =>
+                type === 'navigation'
+                    ? [{ transferSize: 10_000, encodedBodySize: 10_000 }]
+                    : [],
+            now: () => Date.now(),
+        });
         const result = estimateCO2(false);
         expect(result.co2Grams).toBeGreaterThanOrEqual(0);
     });
 
     it('does not invent a web percentile (cleanerThan is null)', () => {
+        vi.stubGlobal('performance', {
+            getEntriesByType: (type: string) =>
+                type === 'navigation'
+                    ? [{ transferSize: 10_000, encodedBodySize: 10_000 }]
+                    : [],
+            now: () => Date.now(),
+        });
         const result = estimateCO2(false);
         expect(result.cleanerThan).toBeNull();
         expect(result.formulaId).toBe('swdm-v4-lite-first-load-v1');
     });
 
     it('greenHost=true produces lower CO₂ than greenHost=false', () => {
-        // Stub Performance API with a realistic page weight
         vi.stubGlobal('performance', {
             getEntriesByType: (type: string) => {
-                if (type === 'resource') return [{ transferSize: 300 * 1024, encodedBodySize: 300 * 1024 }];
-                if (type === 'navigation') return [{ transferSize: 80 * 1024, encodedBodySize: 80 * 1024 }];
+                if (type === 'resource')
+                    return [
+                        {
+                            transferSize: 300 * 1024,
+                            encodedBodySize: 300 * 1024,
+                        },
+                    ];
+                if (type === 'navigation')
+                    return [
+                        {
+                            transferSize: 80 * 1024,
+                            encodedBodySize: 80 * 1024,
+                        },
+                    ];
                 return [];
             },
             now: () => Date.now(),
@@ -52,10 +98,14 @@ describe('estimateCO2', () => {
         const green = estimateCO2(true);
         expect(green.co2Grams).not.toBeNull();
         expect(standard.co2Grams).not.toBeNull();
+        expect(green.co2Grams!).toBeCloseTo(
+            standard.co2Grams! * (121.03 / 148.2),
+            4,
+        );
         expect(green.co2Grams!).toBeLessThan(standard.co2Grams!);
     });
 
-    it('falls back to DOM estimation when Performance API returns 0', () => {
+    it('does not turn DOM size into a carbon grade', () => {
         vi.stubGlobal('performance', {
             getEntriesByType: () => [],
             now: () => Date.now(),
@@ -65,17 +115,16 @@ describe('estimateCO2', () => {
         });
 
         const result = estimateCO2(false);
-        expect(result.co2Grams).toBeGreaterThan(0);
+        expect(result.co2Grams).toBeNull();
+        expect(result.score).toBeNull();
+        expect(result.status).toBe('unknown');
     });
 
-    it('returns unknown when Performance API and DOM measurement both fail', () => {
-        // Make Performance API throw (triggers catch + warn)
+    it('returns unknown when Performance API is unavailable', () => {
         vi.stubGlobal('performance', {
-            getEntriesByType: () => { throw new Error('not supported'); },
-        });
-        // Make DOM access throw (triggers second catch)
-        vi.stubGlobal('document', {
-            documentElement: { get outerHTML() { throw new Error('no DOM'); } },
+            getEntriesByType: () => {
+                throw new Error('not supported');
+            },
         });
 
         const result = estimateCO2(false);
@@ -89,7 +138,12 @@ describe('estimateCO2', () => {
         vi.stubGlobal('performance', {
             getEntriesByType: (type: string) =>
                 type === 'navigation'
-                    ? [{ transferSize: 1_000_000_000, encodedBodySize: 1_000_000_000 }]
+                    ? [
+                          {
+                              transferSize: 1_000_000_000,
+                              encodedBodySize: 1_000_000_000,
+                          },
+                      ]
                     : [],
         });
 
@@ -102,8 +156,10 @@ describe('estimateCO2', () => {
     it('marks timing as partial when any resource has unknown size', () => {
         vi.stubGlobal('performance', {
             getEntriesByType: (type: string) => {
-                if (type === 'navigation') return [{ transferSize: 100, encodedBodySize: 100 }];
-                if (type === 'resource') return [{ transferSize: 0, encodedBodySize: 0 }];
+                if (type === 'navigation')
+                    return [{ transferSize: 100, encodedBodySize: 100 }];
+                if (type === 'resource')
+                    return [{ transferSize: 0, encodedBodySize: 0 }];
                 return [];
             },
         });
@@ -114,16 +170,29 @@ describe('estimateCO2', () => {
         expect(result.data.co2Grams).not.toBeNull();
         expect(result.measuredResourceCount).toBe(1);
         expect(result.unknownResourceCount).toBe(1);
+        expect(result.observableResourceRatio).toBe(0.5);
         expect(result.coverageRatio).toBe(0.5);
     });
 
     it('logs a warning when Performance API throws', () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         vi.stubGlobal('performance', {
-            getEntriesByType: () => { throw new Error('not supported'); },
+            getEntriesByType: () => {
+                throw new Error('not supported');
+            },
         });
 
         estimateCO2(false);
-        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Performance Resource Timing API unavailable'));
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Performance Resource Timing API unavailable'),
+        );
+    });
+});
+
+describe('co2ToScore input contract', () => {
+    it('rejects non-finite and negative input', () => {
+        for (const value of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+            expect(() => co2ToScore(value)).toThrow(RangeError);
+        }
     });
 });

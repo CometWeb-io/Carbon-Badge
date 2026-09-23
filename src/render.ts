@@ -54,24 +54,52 @@ function hasFreshSnapshotProvenance(data: BadgeData): boolean {
     );
 }
 
-export function trustedEvidenceUrl(raw: string | null | undefined): URL | null {
+/**
+ * Evidence URL must be HTTPS, credential-free, on an allowlisted origin,
+ * and (when a publicId is known) bound to `/carbon-badge/{publicId}` with
+ * no query or fragment.
+ */
+export function trustedEvidenceUrl(
+    raw: string | null | undefined,
+    publicId: string | null = null,
+): URL | null {
     if (!raw) return null;
     try {
         const url = new URL(raw);
-        if (url.protocol === 'https:' && ALLOWED_EVIDENCE_ORIGINS.has(url.origin)) {
-            return url;
+        if (url.protocol !== 'https:') return null;
+        if (url.username || url.password) return null;
+        if (!ALLOWED_EVIDENCE_ORIGINS.has(url.origin)) return null;
+
+        if (publicId) {
+            const expectedPath = `/carbon-badge/${encodeURIComponent(publicId.toLowerCase())}`;
+            if (url.pathname.toLowerCase() !== expectedPath) return null;
+            if (url.search || url.hash) return null;
         }
+
+        return url;
     } catch {
-        /* invalid evidence URL */
+        return null;
     }
-    return null;
 }
 
-export function evidenceHref(raw: string | null | undefined): string {
+export function evidenceHref(
+    raw: string | null | undefined,
+    publicId: string | null = null,
+): string {
+    if (publicId) {
+        const bound = trustedEvidenceUrl(raw, publicId);
+        if (bound) return bound.href;
+        return new URL(
+            `/carbon-badge/${encodeURIComponent(publicId.toLowerCase())}`,
+            'https://cometweb.io',
+        ).href;
+    }
     return trustedEvidenceUrl(raw)?.href || DEFAULT_EVIDENCE_URL;
 }
 
-export function buildLoadingMarkup(label = 'Calculating carbon footprint…'): string {
+export function buildLoadingMarkup(
+    label = 'Calculating carbon footprint…',
+): string {
     const safeLabel = escapeHtml(label);
     return `
       <div role="status" aria-live="polite" aria-label="${safeLabel}">
@@ -122,8 +150,10 @@ export function buildBadgeMarkup(
         data.source === 'published_snapshot' &&
         data.publicId !== null &&
         hasFreshSnapshotProvenance(data) &&
-        trustedEvidenceUrl(data.evidenceUrl) !== null;
-    const footerLabel = verified ? 'Verified by CometWeb' : 'Powered by CometWeb';
+        trustedEvidenceUrl(data.evidenceUrl, data.publicId) !== null;
+    const footerLabel = verified
+        ? 'Verified by CometWeb'
+        : 'Powered by CometWeb';
 
     let subtitleHtml: string;
     if (data.status === 'stale') {
@@ -137,7 +167,7 @@ export function buildBadgeMarkup(
             : 'Published snapshot';
     } else if (data.cleanerThan !== null && Number.isFinite(data.cleanerThan)) {
         const pct = escapeHtml(String(clamp(data.cleanerThan, 0, 100)));
-        subtitleHtml = `Cleaner than <span class="cw-highlight">${pct}%</span> of web`;
+        subtitleHtml = `Cleaner than <span class="cw-highlight">${pct}%</span> of modelled cohort`;
     } else if (data.source === 'estimate') {
         subtitleHtml = data.estimatePartial
             ? 'Local estimate (partial)'
@@ -147,9 +177,9 @@ export function buildBadgeMarkup(
     }
 
     const ariaCo2 = co2Grams < 0.01 ? 'less than 0.01' : co2Grams.toFixed(2);
-    const ariaLabel = `Carbon footprint: ${ariaCo2}g CO₂e per visit, score ${score}`;
+    const ariaLabel = `Carbon footprint: ${ariaCo2}g CO₂e per visit, CometWeb Score ${score}`;
     const safeAria = escapeHtml(ariaLabel);
-    const href = escapeHtml(evidenceHref(data.evidenceUrl));
+    const href = escapeHtml(evidenceHref(data.evidenceUrl, data.publicId));
 
     return {
         verified,
@@ -165,6 +195,7 @@ export function buildBadgeMarkup(
           <div class="cw-content">
             <div class="cw-title">${co2Display}g CO₂e <small>/ visit</small></div>
             <div class="cw-subtitle">${subtitleHtml}</div>
+            <div class="cw-score-model" aria-hidden="true">CometWeb Score ${safeScore}</div>
             <div class="cw-footer" aria-hidden="true">${footerLabel}</div>
           </div>
         </a>

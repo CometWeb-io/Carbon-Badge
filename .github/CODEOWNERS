@@ -1,0 +1,12 @@
+# Prefer GitHub teams when available. Until then, keep owner review on
+# release-critical surfaces (org CODEOWNERS teams are optional).
+* @MaciejZet
+
+/package.json @MaciejZet
+/package-lock.json @MaciejZet
+/.github/workflows/ @MaciejZet
+/src/api-client.ts @MaciejZet
+/src/normalize.ts @MaciejZet
+/src/estimator.ts @MaciejZet
+/src/render.ts @MaciejZet
+/src/badge.ts @MaciejZet

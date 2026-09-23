@@ -10,12 +10,15 @@ export type MeasurementStatus =
     | 'unknown'
     | 'revoked';
 
+/** How the CO₂ figure was produced — never includes cache/retrieval. */
 export type MeasurementSource =
     | 'api'
-    | 'cache'
     | 'estimate'
     | 'published_snapshot'
     | 'http_estimate';
+
+/** How the payload was obtained for this render. */
+export type RetrievalSource = 'network' | 'cache' | 'local';
 
 export interface BadgeData {
     url: string;
@@ -28,12 +31,14 @@ export interface BadgeData {
     cleanerThan: number | null;
     pageWeightKb: number | null;
     greenHost: boolean | null;
-    /** Backend verification signal; rendering also requires fresh allowlisted evidence. */
+    /** Backend verification signal; rendering also requires bound evidence. */
     verified: boolean;
     timestamp: number;
     status: MeasurementStatus;
     source: MeasurementSource;
     formulaId: string | null;
+    /** Product score model id (CometWeb bands, not Digital Carbon Rating). */
+    scoreModelId: string | null;
     measurementMethod: string | null;
     measuredAt: string | null;
     validUntil: string | null;
@@ -42,6 +47,8 @@ export interface BadgeData {
     estimatePartial?: boolean;
     measuredResourceCount?: number;
     unknownResourceCount?: number;
+    observableResourceRatio?: number;
+    /** @deprecated Alias of observableResourceRatio. */
     coverageRatio?: number;
 }
 
@@ -81,16 +88,18 @@ export interface APIResponse {
     cached?: boolean;
     ttl?: number;
     formula_id?: string | null;
+    formula_version?: string | null;
     measurement_method?: string | null;
     measurement_source?: string | null;
     measured_at?: string | null;
     scan_measured_at?: string | null;
     valid_until?: string | null;
     evidence_url?: string | null;
-    status?: MeasurementStatus;
+    status?: MeasurementStatus | string;
     benchmark?: number | null;
 }
 
-export const BADGE_CACHE_SCHEMA = 3;
+export const BADGE_CACHE_SCHEMA = 4;
 export const FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1 = 'swdm-v4-lite-first-load-v1';
 export const FORMULA_ID_TRANSFER_V2 = 'cometweb_scan_transfer_v2';
+export const SCORE_MODEL_ID_COMETWEB_BANDS_V1 = 'carbon-badge-bands-v1';

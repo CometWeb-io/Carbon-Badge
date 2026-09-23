@@ -12,9 +12,8 @@ test.describe('carbon badge lifecycle (CB-29)', () => {
     await expect(el).toBeVisible();
 
     await page.waitForFunction(() => {
-      const host = document.querySelector('cometweb-carbon-badge');
-      const root = host?.shadowRoot;
-      return !!root && (root.textContent || '').trim().length > 0;
+      const host = document.querySelector('cometweb-carbon-badge') as any;
+      return host?.measurementStatus !== null;
     });
 
     const state = await page.evaluate(() => {

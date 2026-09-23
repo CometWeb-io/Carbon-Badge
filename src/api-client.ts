@@ -5,6 +5,8 @@ export const MAX_RETRIES = 3;
 export const MAX_RETRY_AFTER_MS = 30_000;
 const SNAPSHOT_ID_PATTERN = /^[a-f0-9]{1,64}$/i;
 
+const inFlightRequests = new Map<string, Promise<unknown>>();
+
 function isLocalhost(hostname: string): boolean {
     return (
         hostname === 'localhost' ||
@@ -13,18 +15,25 @@ function isLocalhost(hostname: string): boolean {
     );
 }
 
-export function validateApiUrl(raw: string, apiKey: string | null): URL {
+/**
+ * Public runtime builds may only talk to CometWeb (or loopback for local
+ * development). Arbitrary `api-url` values are rejected so an embedder cannot
+ * spoof branded measurement responses.
+ */
+export function validateApiUrl(raw: string): URL {
     const url = new URL(raw);
-    if (url.protocol !== 'https:' && !isLocalhost(url.hostname)) {
+    const isLoopback = isLocalhost(url.hostname);
+
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback)) {
         throw new Error('Carbon Badge API must use HTTPS');
     }
     if (url.username || url.password || url.search || url.hash) {
-        throw new Error('Carbon Badge API URL must not contain credentials or query data');
-    }
-    if (apiKey && url.origin !== DEFAULT_API_ORIGIN) {
         throw new Error(
-            'Authenticated Carbon Badge requests may only use the trusted API origin',
+            'Carbon Badge API URL must not contain credentials, query or fragment',
         );
+    }
+    if (url.origin !== DEFAULT_API_ORIGIN && !isLoopback) {
+        throw new Error('Untrusted Carbon Badge API origin');
     }
     return url;
 }
@@ -81,4 +90,39 @@ export function parseRetryAfter(
 
 export function isRetryableHttpStatus(status: number): boolean {
     return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+/** Exponential backoff with jitter; Retry-After wins when present. */
+export function calculateRetryDelay(
+    attempt: number,
+    retryAfterMs = 0,
+): number {
+    if (retryAfterMs > 0) {
+        return Math.min(retryAfterMs, MAX_RETRY_AFTER_MS);
+    }
+    const base = Math.min(500 * 2 ** Math.max(0, attempt), 10_000);
+    const jitter = 0.5 + Math.random();
+    return Math.round(base * jitter);
+}
+
+/**
+ * Deduplicate identical in-flight network requests across badge instances.
+ */
+export function fetchSingleFlight<T>(
+    key: string,
+    factory: () => Promise<T>,
+): Promise<T> {
+    const existing = inFlightRequests.get(key);
+    if (existing) return existing as Promise<T>;
+
+    const request = factory().finally(() => {
+        inFlightRequests.delete(key);
+    });
+    inFlightRequests.set(key, request);
+    return request;
+}
+
+/** Test helper — clears the module-level single-flight map. */
+export function clearInFlightRequests(): void {
+    inFlightRequests.clear();
 }

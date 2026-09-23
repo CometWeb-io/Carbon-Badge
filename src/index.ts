@@ -20,6 +20,17 @@ export {
     parseApiResponse,
     normalizeBadgeData,
 } from './normalize';
+export {
+    DEFAULT_API_URL,
+    DEFAULT_API_ORIGIN,
+    validateApiUrl,
+    calculateRetryDelay,
+    fetchSingleFlight,
+} from './api-client';
+export {
+    SCORE_MODEL_ID_COMETWEB_BANDS_V1,
+    FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1,
+} from './types';
 export type {
     BadgeData,
     ScoreLetter,
@@ -27,6 +38,7 @@ export type {
     BadgeMode,
     MeasurementStatus,
     MeasurementSource,
+    RetrievalSource,
     APIResponse,
 } from './types';
 

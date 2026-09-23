@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildBadgeMarkup, buildLoadingMarkup, buildUnknownMarkup } from '../render';
+import {
+    buildBadgeMarkup,
+    buildLoadingMarkup,
+    buildUnknownMarkup,
+    trustedEvidenceUrl,
+} from '../render';
 import type { BadgeData } from '../types';
 
 const readyData: BadgeData = {
@@ -15,10 +20,11 @@ const readyData: BadgeData = {
     status: 'ready',
     source: 'published_snapshot',
     formulaId: 'formula-v1',
+    scoreModelId: 'carbon-badge-bands-v1',
     measurementMethod: 'resource-timing',
     measuredAt: new Date(Date.now() - 60_000).toISOString(),
     validUntil: new Date(Date.now() + 86_400_000).toISOString(),
-    evidenceUrl: 'https://cometweb.io/carbon-badge?url=example',
+    evidenceUrl: 'https://cometweb.io/carbon-badge/abcdef0123',
 };
 
 describe('badge render model', () => {
@@ -30,14 +36,44 @@ describe('badge render model', () => {
         expect(buildUnknownMarkup('<reason>')).toContain('N/D');
     });
 
-    it('renders verified markup only with a trusted evidence URL', () => {
+    it('binds evidence URL to the snapshot publicId', () => {
+        expect(
+            trustedEvidenceUrl(
+                'https://cometweb.io/carbon-badge/otherid',
+                'abcdef0123',
+            ),
+        ).toBeNull();
+        expect(
+            trustedEvidenceUrl(
+                'https://user:pass@cometweb.io/carbon-badge/abcdef0123',
+                'abcdef0123',
+            ),
+        ).toBeNull();
+        expect(
+            trustedEvidenceUrl(
+                'https://cometweb.io/carbon-badge/abcdef0123?x=1',
+                'abcdef0123',
+            ),
+        ).toBeNull();
+        expect(
+            trustedEvidenceUrl(
+                'https://cometweb.io/carbon-badge/abcdef0123',
+                'abcdef0123',
+            )?.href,
+        ).toBe('https://cometweb.io/carbon-badge/abcdef0123');
+    });
+
+    it('renders verified markup only with a trusted bound evidence URL', () => {
         const result = buildBadgeMarkup(readyData, 'dark');
         expect(result.verified).toBe(true);
         expect(result.markup).toContain('Verified by CometWeb');
-        expect(result.markup).toContain('href="https://cometweb.io/carbon-badge?url=example"');
+        expect(result.markup).toContain(
+            'href="https://cometweb.io/carbon-badge/abcdef0123"',
+        );
+        expect(result.markup).toContain('CometWeb Score A');
         expect(result.markup).toContain('Measured');
-        expect(result.markup).toContain('2026');
         expect(result.ariaLabel).toContain('less than 0.01g');
+        expect(result.ariaLabel).toContain('CometWeb Score');
 
         const untrusted = buildBadgeMarkup(
             { ...readyData, evidenceUrl: 'https://evil.test/proof' },
@@ -46,7 +82,7 @@ describe('badge render model', () => {
         expect(untrusted.verified).toBe(false);
         expect(untrusted.markup).toContain('Powered by CometWeb');
         expect(untrusted.markup).toContain(
-            'href="https://cometweb.io/carbon-badge"',
+            'href="https://cometweb.io/carbon-badge/abcdef0123"',
         );
     });
 

@@ -13,12 +13,18 @@ The badge uses [CometWeb](https://cometweb.io) and documents a **SWDM v4 first-l
 For a website owner, use a published CometWeb snapshot. It is a cheap, stable read for visitors: it does not start a scan, the result is dated and the proof link points to the published measurement.
 
 ```html
-<script type="module" src="https://cometweb.io/scripts/cometweb-carbon-badge.esm.js"></script>
+<script
+  type="module"
+  src="https://cometweb.io/scripts/carbon-badge/1.0.8/cometweb-carbon-badge.esm.js"
+  integrity="sha384-<BUILD_GENERATED_HASH>"
+  crossorigin="anonymous"></script>
 <cometweb-carbon-badge
   snapshot-id="<published_public_id>"
   theme="light">
 </cometweb-carbon-badge>
 ```
+
+Prefer an immutable, versioned asset with Subresource Integrity. Do not hotlink an unversioned `/scripts/cometweb-carbon-badge.esm.js` path in production embeds.
 
 Replace `<published_public_id>` with the lowercase hexadecimal public ID from the published CometWeb ecology snapshot. Keep `mode` unset: a `snapshot-id` automatically selects snapshot mode. Use live `api` mode only when you explicitly want URL-based measurement on the visitor path.
 
@@ -73,7 +79,7 @@ For a bundler, install the built package (`npm install /path/to/Carbon-Badge`) a
 | --- | --- | --- |
 | `snapshot` | Published CometWeb measurement | Set `snapshot-id`; recommended owner path |
 | `estimate` | Current page's browser transfer data and simplified SWDM v4 calculation | Explicitly set `mode="estimate"` |
-| `api` (default) | CometWeb public carbon-badge endpoint | Network access; optionally set `url` and `api-url` |
+| `api` (default) | CometWeb public carbon-badge endpoint | Network access; optionally set `url` |
 
 An unavailable measurement displays **N/D**, not a made-up A+ score. A remote URL in API mode never falls back to estimating the host page. API mode is an external service dependency; the component's MIT license does not guarantee service availability.
 
@@ -91,21 +97,22 @@ An unavailable measurement displays **N/D**, not a made-up A+ score. A remote UR
 
 | Attribute | Default | Description |
 | --- | --- | --- |
-| `url` | current page URL | Page to measure in API mode; credential-bearing URLs are rejected and known tracking parameters are stripped |
+| `url` | current page URL | Page to measure in API mode; public identity is origin + pathname (query stripped by default) |
 | `snapshot-id` | — | Published CometWeb public ID; selects snapshot mode when `mode` is omitted |
 | `mode` | `api` or `snapshot` with ID | `snapshot` — published result; `api` — live public API; `estimate` — client-side SWDM v4 first-load lite |
 | `variant` | `default` | `default` card, `compact` strip or `minimal` transparent signature; changes do not reload data |
 | `theme` | `dark` | Allowlisted: `dark` or `light` |
 | `cache-ttl` | `720` | Client cache TTL in minutes for API/estimate mode, capped by the server `valid_until` deadline |
-| `api-url` | `https://app.cometweb.io/api` | Override API base URL; HTTPS is required except localhost |
-| `api-key` | — | Optional publishable/scoped Bearer token; never put a private secret in HTML |
 | `green-host` | `false` | Set `"true"` in estimate mode when the host is green-powered |
+| `allow-query` | — | Optional comma-separated query keys to keep in public URL identity (default: strip all query) |
+
+`api-url` / `api-key` are not public attributes. The badge talks only to `https://app.cometweb.io/api`.
 
 ## Modes and provenance
 
 - **`snapshot`** fetches `GET /public/carbon-badge/id/{public_id}`. It never starts a URL scan. Invalid, missing, mismatching, malformed, stale, partial or revoked snapshots render **N/D**. The client requires the response to identify the same published snapshot with valid measurement and freshness dates.
 - **`api`** fetches `GET /public/carbon-badge`. Invalid or empty payloads render **N/D**. A remote `url` never falls back to estimating the host page.
-- **`estimate`** measures transfer with the Performance Resource Timing API, then applies `swdm-v4-lite-first-load-v1` in the browser. It uses decimal GB and SWDM v4 first-load intensities; it does not implement visitor/cache ratios or a Green Web Foundation lookup. DOM size is explicitly `partial`.
+- **`estimate`** waits for page quiescence, measures transfer with Resource Timing, then applies `swdm-v4-lite-first-load-v1`. DOM size is never used as a carbon score. Missing timing renders **N/D**.
 
 Cheap published snapshot read on the server: `GET /api/public/carbon-badge/id/{public_id}` — no HTTP re-scan.
 
@@ -113,35 +120,37 @@ Cheap published snapshot read on the server: `GET /api/public/carbon-badge/id/{p
 
 | Condition | Footer text |
 | --- | --- |
-| Published snapshot returns `verified: true`, `status: ready`, a public ID, valid current `measured_at`/`valid_until` dates and an evidence URL on an allowlisted CometWeb origin | **Verified by CometWeb** |
+| Published snapshot returns `verified: true`, `status: ready`, a public ID, fresh dates, and an evidence URL bound to `/carbon-badge/{publicId}` on an allowlisted CometWeb origin | **Verified by CometWeb** |
 | Estimate mode, stale/partial/revoked/unknown result, or untrusted/missing evidence | **Powered by CometWeb** |
 
 ## Scoring and methodology
 
-| Score | CO₂e / visit | Meaning |
+Letters are the **CometWeb Carbon Score** (`carbon-badge-bands-v1`) — product bands, not the public Digital Carbon Rating Scale.
+
+| CometWeb Score | CO₂e / visit | Meaning |
 | --- | ---: | --- |
 | A+ | < 0.10 g | Exceptionally clean |
 | A | < 0.20 g | Very clean |
-| B | < 0.40 g | Cleaner than average |
-| C | < 0.70 g | Average |
-| D | < 1.00 g | Above average |
+| B | < 0.40 g | Band B |
+| C | < 0.70 g | Band C |
+| D | < 1.00 g | Band D |
 | F | ≥ 1.00 g | High emissions |
 
 ```text
 CO₂e = data_GB × (E_operational + E_embodied) × grid_intensity
 
-E_operational = 0.055 × hosting_factor + 0.059 + 0.080 kWh/GB
+E_operational = 0.055 × (1 − greenHostingFactor) + 0.059 + 0.080 kWh/GB
 E_embodied = 0.012 + 0.013 + 0.081 kWh/GB
 grid_intensity = 494 gCO₂e/kWh
 ```
 
-`data_GB` uses `bytes / 1,000,000,000`. In estimate mode, `green-host="true"` scales only the data-centre operational term (×0.3). Network, user device and embodied terms stay full intensity. See the [full reference](docs/reference.md) for the complete contract.
+`data_GB` uses `bytes / 1,000,000,000`. In estimate mode, `green-host="true"` sets `greenHostingFactor = 1` (removes the data-centre operational term). See the [full reference](docs/reference.md) for the complete contract.
 
 ## Events
 
 | Event | When |
 | --- | --- |
-| `cometweb:badge-load` | Data rendered (`detail`: url, co2Grams, score, cleanerThan, pageWeightKb, greenHost, source, mode, publicId, status, formulaId, measuredAt, verified, measuredResourceCount, unknownResourceCount, coverageRatio) |
+| `cometweb:badge-load` | Data rendered (`detail`: url, co2Grams, score, measurementSource, retrievalSource, status, formulaId, scoreModelId, …) |
 | `cometweb:badge-error` | Measurement failed (`detail`: sanitized `url`, `mode`, `reason`, `status`) |
 
 ```js

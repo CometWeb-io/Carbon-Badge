@@ -5,3 +5,4 @@ dist
 *.log
 .cursor/
 test-results/
+coverage

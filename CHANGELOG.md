@@ -1,6 +1,29 @@
 # Changelog
 
-## Unreleased
+## [Unreleased]
+
+### Security
+- Public URL identity defaults to origin + pathname (no query string) to prevent accidental PII/token leakage.
+- Runtime API origin is pinned to `https://app.cometweb.io` (loopback only for local development).
+- Removed `api-key` and `api-url` from the public Web Component attribute surface.
+- Evidence URLs must be HTTPS, credential-free, and bound to `/carbon-badge/{publicId}` for Verified claims.
+- GitHub Actions are SHA-pinned; npm publish path uses OIDC provenance (`publish.yml`).
+
+### Fixed
+- API responses without `status` or `url` fail closed to N/D (no silent `ready`).
+- DOM-size heuristic no longer produces a carbon letter grade.
+- Local estimates wait for page load + Resource Timing quiet period before measuring.
+- Theme fallback `<style>` path updates correctly when `theme` changes.
+- `toFiniteNumberOrNull` no longer coerces booleans/arrays; `co2ToScore` rejects invalid input.
+- Cache namespace is owned (`cometweb:carbon-badge:v4:`) and no longer wipes arbitrary `cwb:` host keys.
+- Snapshot fetches use conditional revalidation (`cache: 'no-cache'`) instead of `no-store`.
+- Cross-instance request single-flight + jittered retry backoff for rate limits / 5xx.
+
+### Changed
+- UI labels letters as **CometWeb Score** (`carbon-badge-bands-v1`), not Digital Carbon Rating.
+- Green hosting removes the data-centre operational term (SWDM-style) instead of a `×0.3` multiplier.
+- Events expose `measurementSource` and `retrievalSource` separately.
+- README recommends immutable CDN path + SRI; Playwright covers Chromium, Firefox and WebKit; coverage gate in CI.
 
 - Add `variant="compact"` and `variant="minimal"` in both themes; default layout remains unchanged. Visual switches do not reload measurements.
 
@@ -11,32 +34,6 @@
 
 All notable changes to `@cometweb/carbon-badge` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
-
----
-
-## [Unreleased]
-
-### Fixed
-- Rollup now completes without `--forceExit`, so build lifecycle problems are not masked.
-- Node/SSR imports no longer evaluate the Web Component against missing browser globals.
-- Missing timing/DOM measurement now renders N/D instead of a fabricated 500 KiB estimate.
-- Expired, revoked, unknown, partial, malformed, and untrusted API data are handled explicitly.
-- Cache entries now carry their own expiry and respect server `valid_until`.
-- Constructable Stylesheet fallback, retry timer cleanup, full body timeout, and origin validation are covered.
-- Snapshot responses now require published-snapshot provenance, valid runtime status, and dated freshness fields; malformed or mismatched payloads fail closed.
-- Credential-bearing URLs are never retained in error state or error events, and non-transient HTTP failures no longer trigger duplicate retries.
-
-### Changed
-- Published snapshot mode is now the owner-first embed path; live API and local estimate remain explicit secondary modes.
-- Snapshot rendering exposes measurement date and public provenance, and restricts the Verified footer to published snapshots.
-- Package metadata now points at the canonical `CometWeb-io/Carbon-Badge` repository.
-- Estimate mode uses `swdm-v4-lite-first-load-v1` with decimal GB and the documented SWDM v4 intensities.
-- `api-key` is documented as a publishable/scoped token; authenticated requests cannot target arbitrary API origins.
-- CI now runs dependency audit, test/E2E typecheck, package-consumer smoke, and a lockfile-owned static server.
-- Transport and rendering are split into pure, directly tested modules; the component remains the lifecycle adapter.
-- Security workflow adds CodeQL, dependency review, CycloneDX SBOM artifacts, and package provenance attestation on `main`.
-- Bundle size is now measured in CI; current ESM/UMD output is approximately 8 KB gzip with an 8.5 KB regression budget.
-- `happy-dom`, Vitest, Terser, and transitive toolchain dependencies were updated to audited versions.
 
 ---
 

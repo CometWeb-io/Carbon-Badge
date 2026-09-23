@@ -90,8 +90,9 @@ test.describe('API status contracts', () => {
     await gotoWithResponse(page, {
       url: 'https://example.com/api-ready',
       co2_grams: 0.23,
+      status: 'ready',
       verified: true,
-      evidence_url: 'https://cometweb.io/evidence/example',
+      evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
       valid_until: '2020-01-01T00:00:00.000Z',
     });
 
