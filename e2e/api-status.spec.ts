@@ -30,6 +30,9 @@ test.describe('API status contracts', () => {
           status: 'ready',
           verified: true,
           measurement_source: 'published_snapshot',
+          measurement_method: 'cometweb_scan_transfer_v2',
+          formula_id: 'cometweb_scan_transfer_v2',
+          score_model_id: 'carbon-badge-bands-v1',
           measured_at: measuredAt,
           valid_until: validUntil,
           evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
@@ -86,7 +89,7 @@ test.describe('API status contracts', () => {
     expect(state).toEqual({ score: null, co2: null, status: 'unknown' });
   });
 
-  test('renders expired measurements as stale and not verified', async ({ page }) => {
+  test('renders expired measurements as N/D and not verified', async ({ page }) => {
     await gotoWithResponse(page, {
       url: 'https://example.com/api-ready',
       co2_grams: 0.23,
@@ -94,9 +97,11 @@ test.describe('API status contracts', () => {
       verified: true,
       evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
       valid_until: '2020-01-01T00:00:00.000Z',
+      measured_at: '2019-12-01T00:00:00.000Z',
     });
 
-    await expect(page.locator('cometweb-carbon-badge')).toContainText('Stale measurement');
+    await expect(page.locator('cometweb-carbon-badge')).toContainText('N/D');
     await expect(page.locator('cometweb-carbon-badge')).not.toContainText('Verified by CometWeb');
+    await expect(page.locator('cometweb-carbon-badge')).not.toContainText('Stale measurement');
   });
 });
