@@ -14,8 +14,28 @@ import type {
 } from './types';
 import { SCORE_MODEL_ID_COMETWEB_BANDS_V1 } from './types';
 import { co2ToScore } from './estimator';
-import { clamp, toFiniteNumberOrNull } from './utils';
+import { toFiniteNumberOrNull } from './utils';
 import { validateSnapshotId } from './api-client';
+
+/** Query keys that must never enter allow-query / public identity. */
+const SENSITIVE_QUERY_KEY =
+    /^(token|access_token|refresh_token|api[_-]?key|secret|password|passwd|session|sid|jwt|auth|authorization|code|email)$/i;
+
+/**
+ * Drop duplicates and sensitive keys from an allow-query attribute.
+ */
+export function sanitizeAllowedQueryKeys(
+    keys: readonly string[],
+): string[] {
+    return [
+        ...new Set(
+            keys
+                .map((key) => key.trim().toLowerCase())
+                .filter(Boolean)
+                .filter((key) => !SENSITIVE_QUERY_KEY.test(key)),
+        ),
+    ];
+}
 
 /**
  * Canonical public URL identity.
@@ -36,7 +56,7 @@ export function canonicalizeBadgeUrl(
         u.hash = '';
 
         const allowlist = new Set(
-            allowedQueryKeys.map((key) => key.toLowerCase()),
+            sanitizeAllowedQueryKeys(allowedQueryKeys),
         );
         const safeQuery = new URLSearchParams();
         for (const [key, value] of u.searchParams.entries()) {
@@ -58,9 +78,13 @@ export function canonicalizeBadgeUrl(
     }
 }
 
-function sameUrlIdentity(a: string, b: string): boolean {
-    const ca = canonicalizeBadgeUrl(a);
-    const cb = canonicalizeBadgeUrl(b);
+function sameUrlIdentity(
+    a: string,
+    b: string,
+    allowedQueryKeys: readonly string[] = [],
+): boolean {
+    const ca = canonicalizeBadgeUrl(a, allowedQueryKeys);
+    const cb = canonicalizeBadgeUrl(b, allowedQueryKeys);
     if (!ca || !cb) return false;
     return ca === cb;
 }
@@ -94,21 +118,35 @@ function parseMeasurementStatus(raw: unknown): MeasurementStatus | null {
     }
 }
 
+function percentageOrNull(value: unknown): number | null {
+    const n = toFiniteNumberOrNull(value);
+    return n !== null && n >= 0 && n <= 100 ? n : null;
+}
+
+function nonNegativeOrNull(value: unknown): number | null {
+    const n = toFiniteNumberOrNull(value);
+    return n !== null && n >= 0 ? n : null;
+}
+
 export interface NormalizeApiOptions {
     requestedUrl: string;
     requestedSnapshotId?: string | null;
+    allowedQueryKeys?: readonly string[];
     now?: number;
 }
 
 /**
  * Parse public API JSON into BadgeData. Returns null when measurement is unusable
- * (missing CO₂, status, URL, or identity mismatch) — caller must show N/D.
+ * (missing CO₂, status, URL, identity mismatch, or expired snapshot) — caller must show N/D.
  */
 export function parseApiResponse(
     apiData: APIResponse | null | undefined,
     options: NormalizeApiOptions,
 ): BadgeData | null {
     if (!apiData || typeof apiData !== 'object') return null;
+
+    const allowed = options.allowedQueryKeys ?? [];
+    const now = options.now ?? Date.now();
 
     let publicId: string | null = null;
     if (typeof apiData.public_id === 'string' && apiData.public_id.trim()) {
@@ -151,12 +189,12 @@ export function parseApiResponse(
     const responseUrl =
         typeof apiData.url === 'string' ? apiData.url.trim() : '';
     if (!responseUrl) return null;
-    const canonicalResponseUrl = canonicalizeBadgeUrl(responseUrl);
+    const canonicalResponseUrl = canonicalizeBadgeUrl(responseUrl, allowed);
     if (!canonicalResponseUrl) return null;
 
     if (
         !options.requestedSnapshotId &&
-        !sameUrlIdentity(responseUrl, options.requestedUrl)
+        !sameUrlIdentity(responseUrl, options.requestedUrl, allowed)
     ) {
         return null;
     }
@@ -166,22 +204,31 @@ export function parseApiResponse(
             ? apiData.valid_until.trim()
             : null;
     const validUntilMs = validUntil ? Date.parse(validUntil) : Number.NaN;
-    if (options.requestedSnapshotId && !Number.isFinite(validUntilMs)) {
-        return null;
-    }
     const measuredAt =
         (typeof apiData.measured_at === 'string' && apiData.measured_at) ||
         (typeof apiData.scan_measured_at === 'string' &&
             apiData.scan_measured_at) ||
         null;
+    const measuredAtMs = measuredAt ? Date.parse(measuredAt) : Number.NaN;
+
     if (options.requestedSnapshotId) {
-        if (!measuredAt || !Number.isFinite(Date.parse(measuredAt))) {
+        // Expired / clock-skew / inverted window → N/D (never a letter).
+        if (
+            !Number.isFinite(measuredAtMs) ||
+            !Number.isFinite(validUntilMs) ||
+            measuredAtMs > now ||
+            validUntilMs <= now ||
+            validUntilMs <= measuredAtMs
+        ) {
             return null;
         }
     }
+
     const expired =
-        Number.isFinite(validUntilMs) &&
-        validUntilMs <= (options.now ?? Date.now());
+        Number.isFinite(validUntilMs) && validUntilMs <= now;
+    // Non-snapshot path: stale is fail-closed for letter grades later.
+    if (expired && options.requestedSnapshotId) return null;
+
     const status: MeasurementStatus =
         expired || statusFromApi === 'stale'
             ? 'stale'
@@ -189,14 +236,42 @@ export function parseApiResponse(
               ? 'partial'
               : 'ready';
 
+    if (status === 'stale') return null;
+
+    const formulaId =
+        (typeof apiData.formula_id === 'string' &&
+            apiData.formula_id.trim()) ||
+        (typeof apiData.formula_version === 'string' &&
+            apiData.formula_version.trim()) ||
+        null;
+
+    const measurementMethod =
+        typeof apiData.measurement_method === 'string' &&
+        apiData.measurement_method.trim()
+            ? apiData.measurement_method.trim()
+            : null;
+
+    const scoreModelId =
+        typeof apiData.score_model_id === 'string' &&
+        apiData.score_model_id.trim()
+            ? apiData.score_model_id.trim()
+            : null;
+
+    if (options.requestedSnapshotId) {
+        if (
+            !formulaId ||
+            !measurementMethod ||
+            scoreModelId !== SCORE_MODEL_ID_COMETWEB_BANDS_V1
+        ) {
+            return null;
+        }
+    }
+
     const score: ScoreLetter = co2ToScore(co2Grams);
-    const cleanerRaw = toFiniteNumberOrNull(
+    const cleanerThan = percentageOrNull(
         apiData.cleaner_than ?? apiData.benchmark ?? null,
     );
-    const cleanerThan =
-        cleanerRaw === null ? null : clamp(cleanerRaw, 0, 100);
-
-    const pageWeightKb = toFiniteNumberOrNull(apiData.page_weight_kb);
+    const pageWeightKb = nonNegativeOrNull(apiData.page_weight_kb);
     const greenHost =
         typeof apiData.green_host === 'boolean' ? apiData.green_host : null;
 
@@ -206,23 +281,15 @@ export function parseApiResponse(
         co2Grams,
         score,
         cleanerThan,
-        pageWeightKb: pageWeightKb === null ? null : Math.max(0, pageWeightKb),
+        pageWeightKb,
         greenHost,
         verified: apiData.verified === true,
-        timestamp: options.now ?? Date.now(),
+        timestamp: now,
         status,
         source: measurementSource,
-        formulaId:
-            (typeof apiData.formula_id === 'string' &&
-                apiData.formula_id.trim()) ||
-            (typeof apiData.formula_version === 'string' &&
-                apiData.formula_version.trim()) ||
-            null,
-        scoreModelId: SCORE_MODEL_ID_COMETWEB_BANDS_V1,
-        measurementMethod:
-            (typeof apiData.measurement_method === 'string' &&
-                apiData.measurement_method) ||
-            null,
+        formulaId,
+        scoreModelId: scoreModelId ?? SCORE_MODEL_ID_COMETWEB_BANDS_V1,
+        measurementMethod,
         measuredAt,
         validUntil,
         evidenceUrl:
@@ -242,28 +309,39 @@ export function normalizeBadgeData(
         co2 === null ||
         co2 < 0 ||
         data.status === 'revoked' ||
-        data.status === 'unknown'
+        data.status === 'unknown' ||
+        data.status === 'stale'
     ) {
         return {
             ...data,
             co2Grams: null,
             score: null,
             cleanerThan: null,
-            status: data.status === 'revoked' ? 'revoked' : 'unknown',
+            status:
+                data.status === 'revoked'
+                    ? 'revoked'
+                    : data.status === 'stale'
+                      ? 'stale'
+                      : 'unknown',
         };
     }
     const validUntilMs = data.validUntil ? Date.parse(data.validUntil) : Number.NaN;
-    const status =
-        Number.isFinite(validUntilMs) && validUntilMs <= Date.now()
-            ? 'stale'
-            : data.status;
-    const cleanerThan = toFiniteNumberOrNull(data.cleanerThan);
+    if (Number.isFinite(validUntilMs) && validUntilMs <= Date.now()) {
+        return {
+            ...data,
+            co2Grams: null,
+            score: null,
+            cleanerThan: null,
+            status: 'stale',
+        };
+    }
+    const cleanerThan = percentageOrNull(data.cleanerThan);
     return {
         ...data,
         co2Grams: co2,
         score: co2ToScore(co2),
-        status,
-        cleanerThan: cleanerThan === null ? null : clamp(cleanerThan, 0, 100),
+        status: data.status,
+        cleanerThan,
         scoreModelId: data.scoreModelId ?? SCORE_MODEL_ID_COMETWEB_BANDS_V1,
     };
 }

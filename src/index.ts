@@ -5,7 +5,7 @@
  * Powered by CometWeb & a documented SWDM v4 first-load lite approximation.
  *
  * Usage:
- *   <script type="module" src="https://unpkg.com/@cometweb/carbon-badge@1.0.8/dist/cometweb-carbon-badge.esm.js"></script>
+ *   <script type="module" src="https://unpkg.com/@cometweb/carbon-badge@1.0.9/dist/cometweb-carbon-badge.esm.js"></script>
  *   <cometweb-carbon-badge snapshot-id="<published_public_id>"></cometweb-carbon-badge>
  *
  * Or via npm:
@@ -14,12 +14,14 @@
  */
 
 export { CometWebCarbonBadge, registerCarbonBadge } from './badge';
-export { estimateCO2, estimateCO2Detailed, co2ToScore } from './estimator';
+export { estimateCO2, estimateCO2Detailed, co2ToScore, initializeResourceTiming } from './estimator';
 export {
     canonicalizeBadgeUrl,
     parseApiResponse,
     normalizeBadgeData,
+    sanitizeAllowedQueryKeys,
 } from './normalize';
+export type { HttpEnvelope } from './api-client';
 export {
     DEFAULT_API_URL,
     DEFAULT_API_ORIGIN,

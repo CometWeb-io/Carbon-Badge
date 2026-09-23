@@ -1,14 +1,16 @@
 /**
- * Tests for localStorage caching layer (cache.ts) — schema v4
+ * Tests for localStorage caching layer (cache.ts) — schema v5
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     getCached,
+    getFreshCached,
     isCacheValid,
     setCache,
     clearExpired,
     buildCacheKey,
     resetCleanupFlag,
+    __CACHE_INDEX_KEY,
 } from '../cache';
 import type { BadgeData } from '../types';
 import { BADGE_CACHE_SCHEMA } from '../types';
@@ -68,7 +70,7 @@ beforeEach(() => {
 
 describe('buildCacheKey', () => {
     it('uses the owned cometweb namespace', () => {
-        expect(key.startsWith('cometweb:carbon-badge:v4:')).toBe(true);
+        expect(key.startsWith('cometweb:carbon-badge:v5:')).toBe(true);
     });
 
     it('changes when mode or green-host changes', () => {
@@ -96,6 +98,12 @@ describe('setCache / getCached', () => {
         expect(getCached(key)).toEqual(mockData);
     });
 
+    it('tracks keys in the owned index', () => {
+        setCache(key, mockData, 720);
+        const index = JSON.parse(localStorage.getItem(__CACHE_INDEX_KEY)!);
+        expect(index).toContain(key);
+    });
+
     it('returns null for a key not in cache', () => {
         expect(getCached('cometweb:carbon-badge:v4:missing')).toBeNull();
     });
@@ -103,6 +111,27 @@ describe('setCache / getCached', () => {
     it('returns null when localStorage contains malformed JSON', () => {
         localStorage.setItem(key, 'not-json{');
         expect(getCached(key)).toBeNull();
+    });
+
+    it('strips verified from host-controlled cache entries', () => {
+        setCache(key, { ...mockData, verified: true }, 720);
+        expect(getCached(key)?.verified).toBe(false);
+        expect(getFreshCached(key)?.verified).toBe(false);
+    });
+
+    it('getFreshCached returns null for expired entries and removes them', () => {
+        localStorage.setItem(
+            key,
+            JSON.stringify({
+                data: mockData,
+                ts: Date.now() - 25 * 60 * 60 * 1000,
+                schema: BADGE_CACHE_SCHEMA,
+                expiresAt: Date.now() - 1,
+            }),
+        );
+        localStorage.setItem(__CACHE_INDEX_KEY, JSON.stringify([key]));
+        expect(getFreshCached(key)).toBeNull();
+        expect(localStorage.getItem(key)).toBeNull();
     });
 });
 
@@ -129,10 +158,21 @@ describe('isCacheValid', () => {
         setCache(key, { ...mockData, status: 'revoked' }, 720);
         expect(isCacheValid(key)).toBe(false);
     });
+
+    it('honours a shorter caller maxAgeMinutes against an existing entry', () => {
+        setCache(key, mockData, 720);
+        expect(isCacheValid(key, 5)).toBe(true);
+        const entry = JSON.parse(localStorage.getItem(key)!);
+        entry.ts = Date.now() - 10 * 60_000;
+        entry.expiresAt = Date.now() + 11 * 60 * 60_000;
+        localStorage.setItem(key, JSON.stringify(entry));
+        expect(isCacheValid(key, 5)).toBe(false);
+    });
 });
 
 describe('clearExpired', () => {
-    it('removes expired entries', () => {
+    it('removes expired entries via the index without requiring a full scan', () => {
+        setCache(key, mockData, 720);
         localStorage.setItem(
             key,
             JSON.stringify({
@@ -142,8 +182,13 @@ describe('clearExpired', () => {
                 expiresAt: Date.now() - 1,
             }),
         );
+        // Poison the store with an unrelated host key — cleanup must not depend on
+        // walking every key for current-schema eviction.
+        localStorage.setItem('host-app:big', 'x'.repeat(100));
         clearExpired();
         expect(localStorage.getItem(key)).toBeNull();
+        expect(localStorage.getItem('host-app:big')).toBe('x'.repeat(100));
+        expect(JSON.parse(localStorage.getItem(__CACHE_INDEX_KEY)!)).toEqual([]);
     });
 
     it('keeps fresh entries', () => {
@@ -179,6 +224,8 @@ describe('clearExpired', () => {
                 schema: BADGE_CACHE_SCHEMA,
             }),
         );
+        // Index must know about the key (setCache normally registers it).
+        localStorage.setItem(__CACHE_INDEX_KEY, JSON.stringify([key]));
         clearExpired();
         expect(localStorage.getItem(key)).not.toBeNull();
         expect(isCacheValid(key)).toBe(true);

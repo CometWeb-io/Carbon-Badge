@@ -12,19 +12,22 @@ The badge uses [CometWeb](https://cometweb.io) and documents a **SWDM v4 first-l
 
 For a website owner, use a published CometWeb snapshot. It is a cheap, stable read for visitors: it does not start a scan, the result is dated and the proof link points to the published measurement.
 
+Prefer an immutable, versioned asset with Subresource Integrity. After
+`npm run build && npm run sri`, copy the `esm.sri` value from
+`dist/release-manifest.json` into the `integrity` attribute. Do not hotlink an
+unversioned `/scripts/cometweb-carbon-badge.esm.js` path in production embeds.
+
 ```html
 <script
   type="module"
-  src="https://cometweb.io/scripts/carbon-badge/1.0.8/cometweb-carbon-badge.esm.js"
-  integrity="sha384-<BUILD_GENERATED_HASH>"
+  src="https://cometweb.io/scripts/carbon-badge/1.0.9/cometweb-carbon-badge.esm.js"
+  integrity="sha384-<from dist/release-manifest.json esm.sri>"
   crossorigin="anonymous"></script>
 <cometweb-carbon-badge
   snapshot-id="<published_public_id>"
   theme="light">
 </cometweb-carbon-badge>
 ```
-
-Prefer an immutable, versioned asset with Subresource Integrity. Do not hotlink an unversioned `/scripts/cometweb-carbon-badge.esm.js` path in production embeds.
 
 Replace `<published_public_id>` with the lowercase hexadecimal public ID from the published CometWeb ecology snapshot. Keep `mode` unset: a `snapshot-id` automatically selects snapshot mode. Use live `api` mode only when you explicitly want URL-based measurement on the visitor path.
 
@@ -55,7 +58,7 @@ Omit `variant` for the default card. All variants retain the estimate, source/st
 
 ## Install and add it to a page
 
-The code in this repository is version **1.0.8**. Build it locally when you need the exact behavior documented here:
+The code in this repository is version **1.0.9**. Build it locally when you need the exact behavior documented here:
 
 ```bash
 git clone https://github.com/CometWeb-io/Carbon-Badge.git
@@ -93,7 +96,7 @@ An unavailable measurement displays **N/D**, not a made-up A+ score. A remote UR
 </cometweb-carbon-badge>
 ```
 
-`green-host` is your assertion about hosting in estimate mode. It is not checked against a registry. Letter grades are fixed product bands; a percentile appears only when supplied by the API.
+`green-host` is a self-declared hosting assertion in estimate mode. It is not checked against a registry and **does not change the local letter grade**. Letter grades are fixed product bands; a percentile appears only when supplied by the API.
 
 | Attribute | Default | Description |
 | --- | --- | --- |
@@ -144,7 +147,7 @@ E_embodied = 0.012 + 0.013 + 0.081 kWh/GB
 grid_intensity = 494 gCO₂e/kWh
 ```
 
-`data_GB` uses `bytes / 1,000,000,000`. In estimate mode, `green-host="true"` sets `greenHostingFactor = 1` (removes the data-centre operational term). See the [full reference](docs/reference.md) for the complete contract.
+`data_GB` uses `bytes / 1,000,000,000`. In estimate mode, `green-host="true"` is recorded as a self-declared assertion but does not change `greenHostingFactor` (always 0 in local estimate mode). See the [full reference](docs/reference.md) for the complete contract.
 
 ## Events
 

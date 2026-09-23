@@ -5,7 +5,15 @@ export const MAX_RETRIES = 3;
 export const MAX_RETRY_AFTER_MS = 30_000;
 const SNAPSHOT_ID_PATTERN = /^[a-f0-9]{1,64}$/i;
 
-const inFlightRequests = new Map<string, Promise<unknown>>();
+/** Immutable response envelope shared across concurrent badge instances. */
+export interface HttpEnvelope {
+    ok: boolean;
+    status: number;
+    retryAfter: string | null;
+    bodyText: string;
+}
+
+const inFlightRequests = new Map<string, Promise<HttpEnvelope>>();
 
 function isLocalhost(hostname: string): boolean {
     return (
@@ -107,17 +115,40 @@ export function calculateRetryDelay(
 
 /**
  * Deduplicate identical in-flight network requests across badge instances.
+ * Shares an immutable {@link HttpEnvelope} (body already read), never a
+ * one-shot `Response`. Timeout aborts the shared fetch.
  */
-export function fetchSingleFlight<T>(
+export function fetchSingleFlight(
     key: string,
-    factory: () => Promise<T>,
-): Promise<T> {
+    init: RequestInit = {},
+    timeoutMs = API_TIMEOUT_MS,
+): Promise<HttpEnvelope> {
     const existing = inFlightRequests.get(key);
-    if (existing) return existing as Promise<T>;
+    if (existing) return existing;
 
-    const request = factory().finally(() => {
+    const request = (async (): Promise<HttpEnvelope> => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch(key, {
+                ...init,
+                signal: controller.signal,
+            });
+
+            return {
+                ok: response.ok,
+                status: response.status,
+                retryAfter: response.headers.get('Retry-After'),
+                bodyText: await response.text(),
+            };
+        } finally {
+            clearTimeout(timeout);
+        }
+    })().finally(() => {
         inFlightRequests.delete(key);
     });
+
     inFlightRequests.set(key, request);
     return request;
 }

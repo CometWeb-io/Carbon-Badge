@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
     buildBadgeMarkup,
-    buildLoadingMarkup,
-    buildUnknownMarkup,
+    mountBadge,
+    mountLoading,
+    mountUnknown,
     trustedEvidenceUrl,
 } from '../render';
 import type { BadgeData } from '../types';
@@ -28,12 +29,16 @@ const readyData: BadgeData = {
 };
 
 describe('badge render model', () => {
-    it('renders loading and unknown states with escaped user-facing text', () => {
-        expect(buildLoadingMarkup('<loading>')).toContain(
-            'aria-label="&lt;loading&gt;"',
+    it('mounts loading and unknown states with textContent (no HTML injection)', () => {
+        const host = document.createElement('div');
+        mountLoading(host, '<loading>');
+        expect(host.querySelector('[aria-label]')?.getAttribute('aria-label')).toBe(
+            '<loading>',
         );
-        expect(buildUnknownMarkup('<reason>')).toContain('&lt;reason&gt;');
-        expect(buildUnknownMarkup('<reason>')).toContain('N/D');
+        mountUnknown(host, '<reason>');
+        expect(host.querySelector('.cw-subtitle')?.textContent).toBe('<reason>');
+        expect(host.querySelector('.cw-grade')?.textContent).toBe('N/D');
+        expect(host.querySelector('.cw-subtitle')?.innerHTML).toBe('&lt;reason&gt;');
     });
 
     it('binds evidence URL to the snapshot publicId', () => {
@@ -64,25 +69,37 @@ describe('badge render model', () => {
     });
 
     it('renders verified markup only with a trusted bound evidence URL', () => {
-        const result = buildBadgeMarkup(readyData, 'dark');
-        expect(result.verified).toBe(true);
-        expect(result.markup).toContain('Verified by CometWeb');
-        expect(result.markup).toContain(
-            'href="https://cometweb.io/carbon-badge/abcdef0123"',
+        const host = document.createElement('div');
+        const model = mountBadge(host, readyData, 'dark', {
+            trust: { allowVerified: true },
+        });
+        expect(model.verified).toBe(true);
+        expect(host.querySelector('.cw-footer')?.textContent).toBe(
+            'Verified by CometWeb',
         );
-        expect(result.markup).toContain('CometWeb Score A');
-        expect(result.markup).toContain('Measured');
-        expect(result.ariaLabel).toContain('less than 0.01g');
-        expect(result.ariaLabel).toContain('CometWeb Score');
+        expect(host.querySelector('a')?.getAttribute('href')).toBe(
+            'https://cometweb.io/carbon-badge/abcdef0123',
+        );
+        expect(host.querySelector('.cw-score-model')?.textContent).toContain(
+            'CometWeb Score A',
+        );
+        expect(host.querySelector('.cw-subtitle')?.textContent).toContain('Measured');
+        expect(model.ariaLabel).toContain('less than 0.01g');
+        expect(model.ariaLabel).toContain('CometWeb Score');
 
-        const untrusted = buildBadgeMarkup(
+        const untrustedHost = document.createElement('div');
+        const untrusted = mountBadge(
+            untrustedHost,
             { ...readyData, evidenceUrl: 'https://evil.test/proof' },
             'light',
+            { trust: { allowVerified: true } },
         );
         expect(untrusted.verified).toBe(false);
-        expect(untrusted.markup).toContain('Powered by CometWeb');
-        expect(untrusted.markup).toContain(
-            'href="https://cometweb.io/carbon-badge/abcdef0123"',
+        expect(untrustedHost.querySelector('.cw-footer')?.textContent).toBe(
+            'Powered by CometWeb',
+        );
+        expect(untrustedHost.querySelector('a')?.getAttribute('href')).toBe(
+            'https://cometweb.io/carbon-badge/abcdef0123',
         );
     });
 

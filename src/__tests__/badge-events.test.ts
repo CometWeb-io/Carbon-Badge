@@ -5,8 +5,18 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import '../index';
+import { SCORE_MODEL_ID_COMETWEB_BANDS_V1 } from '../types';
+import { clearInFlightRequests } from '../api-client';
+import { buildCacheKey, setCache } from '../cache';
+import { canonicalizeBadgeUrl } from '../normalize';
 
 const TAG = 'cometweb-carbon-badge';
+
+const SNAPSHOT_PROVENANCE = {
+    formula_id: 'swdm-v4-lite',
+    measurement_method: 'cometweb_scan_transfer_v2',
+    score_model_id: SCORE_MODEL_ID_COMETWEB_BANDS_V1,
+};
 
 function makeApiResponse(overrides: Record<string, unknown> = {}) {
     return {
@@ -23,6 +33,27 @@ function makeApiResponse(overrides: Record<string, unknown> = {}) {
     };
 }
 
+function mockOkResponse(body: unknown, status = 200) {
+    const bodyText = JSON.stringify(body);
+    return {
+        ok: status >= 200 && status < 300,
+        status,
+        headers: { get: () => null as string | null },
+        text: () => Promise.resolve(bodyText),
+        json: () => Promise.resolve(body),
+    };
+}
+
+function mockFailResponse(status = 404) {
+    return {
+        ok: false,
+        status,
+        headers: { get: () => null as string | null },
+        text: () => Promise.resolve(''),
+        json: () => Promise.resolve({}),
+    };
+}
+
 beforeAll(() => {
     vi.stubGlobal(
         'fetch',
@@ -36,6 +67,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    clearInFlightRequests();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     document.body.innerHTML = '';
@@ -52,12 +84,7 @@ describe('cometweb:badge-load event', () => {
 
         vi.stubGlobal(
             'fetch',
-            vi.fn().mockResolvedValue({
-                ok: true,
-                status: 200,
-                headers: { get: () => null },
-                json: () => Promise.resolve(apiData),
-            }),
+            vi.fn().mockResolvedValue(mockOkResponse(apiData)),
         );
 
         const el = document.createElement(TAG) as HTMLElement;
@@ -82,19 +109,15 @@ describe('cometweb:badge-load event', () => {
     it('exposes correct score via public getter after load', async () => {
         vi.stubGlobal(
             'fetch',
-            vi.fn().mockResolvedValue({
-                ok: true,
-                status: 200,
-                headers: { get: () => null },
-                json: () =>
-                    Promise.resolve(
-                        makeApiResponse({
-                            url: 'https://example.com/a',
-                            score: 'A',
-                            co2_grams: 0.15,
-                        }),
-                    ),
-            }),
+            vi.fn().mockResolvedValue(
+                mockOkResponse(
+                    makeApiResponse({
+                        url: 'https://example.com/a',
+                        score: 'A',
+                        co2_grams: 0.15,
+                    }),
+                ),
+            ),
         );
 
         const el = document.createElement(TAG) as any;
@@ -117,12 +140,7 @@ describe('CB-01 fail-closed empty CO₂', () => {
     it('shows N/D for empty API body — never A+', async () => {
         vi.stubGlobal(
             'fetch',
-            vi.fn().mockResolvedValue({
-                ok: true,
-                status: 200,
-                headers: { get: () => null },
-                json: () => Promise.resolve({}),
-            }),
+            vi.fn().mockResolvedValue(mockOkResponse({})),
         );
 
         const el = document.createElement(TAG) as any;
@@ -225,6 +243,7 @@ describe('API response validation', () => {
                 ok: true,
                 status: 200,
                 headers: { get: () => null },
+                text: async function () { return JSON.stringify(await this.json()); },
                 json: () =>
                     Promise.resolve(
                         makeApiResponse({ co2_grams: 0.1, status: 'revoked' }),
@@ -244,24 +263,20 @@ describe('API response validation', () => {
         expect(el.shadowRoot?.innerHTML).toContain('N/D');
     });
 
-    it('shows stale status and never labels an expired response verified', async () => {
+    it('fail-closes expired responses to N/D (never a verified letter)', async () => {
         vi.stubGlobal(
             'fetch',
-            vi.fn().mockResolvedValue({
-                ok: true,
-                status: 200,
-                headers: { get: () => null },
-                json: () =>
-                    Promise.resolve(
-                        makeApiResponse({
-                            url: 'https://example.com/stale',
-                            co2_grams: 0.15,
-                            verified: true,
-                            evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
-                            valid_until: '2020-01-01T00:00:00.000Z',
-                        }),
-                    ),
-            }),
+            vi.fn().mockResolvedValue(
+                mockOkResponse(
+                    makeApiResponse({
+                        url: 'https://example.com/stale',
+                        co2_grams: 0.15,
+                        verified: true,
+                        evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
+                        valid_until: '2020-01-01T00:00:00.000Z',
+                    }),
+                ),
+            ),
         );
 
         const el = document.createElement(TAG) as any;
@@ -269,10 +284,11 @@ describe('API response validation', () => {
         el.setAttribute('mode', 'api');
         document.body.appendChild(el);
 
-        await vi.waitFor(() => expect(el.measurementStatus).toBe('stale'), {
-            timeout: 2000,
-        });
-        expect(el.shadowRoot?.innerHTML).toContain('Stale measurement');
+        await vi.waitFor(
+            () => expect(el.shadowRoot?.innerHTML).toContain('N/D'),
+            { timeout: 2000 },
+        );
+        expect(el.score).toBeNull();
         expect(el.shadowRoot?.innerHTML).not.toContain('Verified by CometWeb');
     });
 
@@ -281,6 +297,7 @@ describe('API response validation', () => {
             ok: true,
             status: 200,
             headers: { get: () => null },
+            text: async function () { return JSON.stringify(await this.json()); },
             json: () =>
                 Promise.resolve(
                     makeApiResponse({ url: 'https://example.com/secure' }),
@@ -309,6 +326,7 @@ describe('API response validation', () => {
             ok: true,
             status: 200,
             headers: { get: () => null },
+            text: async function () { return JSON.stringify(await this.json()); },
             json: () => Promise.resolve(makeApiResponse({ url: 'https://example.com/origin' })),
         });
         vi.stubGlobal('fetch', fetchMock);
@@ -330,6 +348,7 @@ describe('API response validation', () => {
                 ok: true,
                 status: 200,
                 headers: { get: () => null },
+                text: async function () { return JSON.stringify(await this.json()); },
                 json: () =>
                     Promise.resolve(
                         makeApiResponse({
@@ -362,6 +381,7 @@ describe('API response validation', () => {
                 ok: true,
                 status: 200,
                 headers: { get: () => null },
+                text: async function () { return JSON.stringify(await this.json()); },
                 json: () =>
                     Promise.resolve(
                         makeApiResponse({
@@ -373,6 +393,7 @@ describe('API response validation', () => {
                             measured_at: new Date(Date.now() - 60_000).toISOString(),
                             valid_until: new Date(Date.now() + 86_400_000).toISOString(),
                             evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
+                            ...SNAPSHOT_PROVENANCE,
                         }),
                     ),
             }),
@@ -398,6 +419,7 @@ describe('API response validation', () => {
                 ok: true,
                 status: 200,
                 headers: { get: () => null },
+                text: async function () { return JSON.stringify(await this.json()); },
                 json: () =>
                     Promise.resolve({
                         url: 'https://example.com',
@@ -430,6 +452,7 @@ describe('API response validation', () => {
                 ok: true,
                 status: 200,
                 headers: { get: () => null },
+                text: async function () { return JSON.stringify(await this.json()); },
                 json: () =>
                     Promise.resolve(
                         makeApiResponse({
@@ -457,11 +480,13 @@ describe('snapshot-first owner mode', () => {
             ok: true,
             status: 200,
             headers: { get: () => null },
+            text: async function () { return JSON.stringify(await this.json()); },
             json: () =>
                 Promise.resolve(
                     makeApiResponse({
                         public_id: 'abcdef0123',
                         measurement_source: 'published_snapshot',
+                        ...SNAPSHOT_PROVENANCE,
                         measured_at: '2026-09-22T10:00:00.000Z',
                         valid_until: '2026-10-22T10:00:00.000Z',
                         evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
@@ -497,6 +522,7 @@ describe('snapshot-first owner mode', () => {
             ok: true,
             status: 200,
             headers: { get: () => null },
+            text: async function () { return JSON.stringify(await this.json()); },
             json: () => Promise.resolve(makeApiResponse()),
         });
         vi.stubGlobal('fetch', fetchMock);
@@ -520,6 +546,7 @@ describe('snapshot-first owner mode', () => {
             ok: true,
             status: 200,
             headers: { get: () => null },
+            text: async function () { return JSON.stringify(await this.json()); },
             json: () =>
                 Promise.resolve(
                     makeApiResponse({
@@ -547,11 +574,7 @@ describe('snapshot-first owner mode', () => {
     });
 
     it('keeps a missing snapshot as N/D without falling back to URL scan', async () => {
-        const fetchMock = vi.fn().mockResolvedValue({
-            ok: false,
-            status: 404,
-            headers: { get: () => null },
-        });
+        const fetchMock = vi.fn().mockResolvedValue(mockFailResponse(404));
         vi.stubGlobal('fetch', fetchMock);
 
         const el = document.createElement(TAG) as any;
@@ -571,11 +594,7 @@ describe('snapshot-first owner mode', () => {
     });
 
     it('does not expose credential-bearing URLs in error state or events', async () => {
-        const fetchMock = vi.fn().mockResolvedValue({
-            ok: false,
-            status: 404,
-            headers: { get: () => null },
-        });
+        const fetchMock = vi.fn().mockResolvedValue(mockFailResponse(404));
         vi.stubGlobal('fetch', fetchMock);
 
         const el = document.createElement(TAG) as any;
@@ -601,12 +620,14 @@ describe('snapshot-first owner mode', () => {
             ok: true,
             status: 200,
             headers: { get: () => null },
+            text: async function () { return JSON.stringify(await this.json()); },
             json: () =>
                 Promise.resolve(
                     makeApiResponse({
                         public_id: 'abcdef0123',
                         url: 'https://example.com/published-home',
                         measurement_source: 'published_snapshot',
+                        ...SNAPSHOT_PROVENANCE,
                         measured_at: new Date(Date.now() - 60_000).toISOString(),
                         valid_until: new Date(Date.now() + 86_400_000).toISOString(),
                     }),
@@ -629,11 +650,13 @@ describe('snapshot-first owner mode', () => {
             ok: true,
             status: 200,
             headers: { get: () => null },
+            text: async function () { return JSON.stringify(await this.json()); },
             json: () =>
                 Promise.resolve(
                     makeApiResponse({
                         public_id: 'abcdef0123',
                         measurement_source: 'published_snapshot',
+                        ...SNAPSHOT_PROVENANCE,
                         measured_at: new Date(Date.now() - 60_000).toISOString(),
                         valid_until: new Date(Date.now() + 86_400_000).toISOString(),
                         verified: true,
@@ -683,6 +706,118 @@ describe('estimate mode', () => {
         expect(el.cleanerThan).toBeNull();
         expect(el.shadowRoot?.innerHTML).not.toContain('of modelled cohort');
         expect(el.shadowRoot?.innerHTML).not.toContain('of web');
+    });
+});
+
+describe('strict modes and Verified trust boundary', () => {
+    it('fail-closes explicit mode=snapshot without snapshot-id (CB-08)', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+
+        const el = document.createElement(TAG) as any;
+        el.setAttribute('mode', 'snapshot');
+        document.body.appendChild(el);
+
+        await vi.waitFor(
+            () => expect(el.shadowRoot?.innerHTML).toContain('N/D'),
+            { timeout: 2000 },
+        );
+        expect(el.shadowRoot?.innerHTML).toContain('Missing snapshot ID');
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('never shows Verified from a poisoned localStorage cache (CB-02)', async () => {
+        const canonical = canonicalizeBadgeUrl('https://example.com')!;
+        const cacheKey = buildCacheKey({
+            canonicalUrl: canonical,
+            snapshotId: null,
+            mode: 'api',
+            apiUrl: 'https://app.cometweb.io/api',
+            greenHost: false,
+        });
+        setCache(
+            cacheKey,
+            {
+                url: canonical,
+                publicId: 'abcdef0123',
+                co2Grams: 0.15,
+                score: 'A',
+                cleanerThan: null,
+                pageWeightKb: 100,
+                greenHost: false,
+                verified: true,
+                timestamp: Date.now(),
+                status: 'ready',
+                source: 'published_snapshot',
+                formulaId: 'formula-v1',
+                scoreModelId: SCORE_MODEL_ID_COMETWEB_BANDS_V1,
+                measurementMethod: 'resource-timing',
+                measuredAt: new Date(Date.now() - 60_000).toISOString(),
+                validUntil: new Date(Date.now() + 86_400_000).toISOString(),
+                evidenceUrl: 'https://cometweb.io/carbon-badge/abcdef0123',
+            },
+            720,
+        );
+
+        const el = document.createElement(TAG) as any;
+        let detail: any = null;
+        el.addEventListener('cometweb:badge-load', (e: Event) => {
+            detail = (e as CustomEvent).detail;
+        });
+        el.setAttribute('url', 'https://example.com');
+        el.setAttribute('mode', 'api');
+        document.body.appendChild(el);
+
+        await vi.waitFor(() => expect(el.score).toBe('A'), { timeout: 2000 });
+        expect(el.shadowRoot?.innerHTML).toContain('Powered by CometWeb');
+        expect(el.shadowRoot?.innerHTML).not.toContain('Verified by CometWeb');
+        expect(detail?.verified).toBe(false);
+        expect(detail?.retrievalSource).toBe('cache');
+    });
+
+    it('emits effective verified separately from backendVerified (CB-16)', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: { get: () => null },
+                text: async function () {
+                    return JSON.stringify(await this.json());
+                },
+                json: () =>
+                    Promise.resolve(
+                        makeApiResponse({
+                            score: 'A',
+                            co2_grams: 0.15,
+                            verified: true,
+                            public_id: 'abcdef0123',
+                            measurement_source: 'published_snapshot',
+                            measured_at: new Date(Date.now() - 60_000).toISOString(),
+                            valid_until: new Date(
+                                Date.now() + 86_400_000,
+                            ).toISOString(),
+                            evidence_url:
+                                'https://cometweb.io/carbon-badge/abcdef0123',
+                            ...SNAPSHOT_PROVENANCE,
+                        }),
+                    ),
+            }),
+        );
+
+        const el = document.createElement(TAG) as any;
+        let detail: any = null;
+        el.addEventListener('cometweb:badge-load', (e: Event) => {
+            detail = (e as CustomEvent).detail;
+        });
+        el.setAttribute('url', 'https://example.com');
+        el.setAttribute('snapshot-id', 'abcdef0123');
+        document.body.appendChild(el);
+
+        await vi.waitFor(() => expect(detail).not.toBeNull(), { timeout: 2000 });
+        expect(detail.verified).toBe(true);
+        expect(detail.backendVerified).toBe(true);
+        expect(el.shadowRoot?.innerHTML).toContain('Verified by CometWeb');
     });
 });
 

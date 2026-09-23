@@ -1,6 +1,6 @@
 {
     "name": "@cometweb/carbon-badge",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "description": "Lightweight web component badge showing CO₂e emissions per page view — powered by CometWeb & SWDM v4",
     "main": "dist/cometweb-carbon-badge.umd.js",
     "module": "dist/cometweb-carbon-badge.esm.js",
@@ -29,11 +29,13 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "test:e2e": "playwright test",
-        "clean": "rm -rf dist",
+        "clean": "node scripts/clean.mjs",
         "size:check": "node scripts/check-bundle-size.mjs",
         "pack:check": "npm pack --dry-run",
         "pack:consumer": "node scripts/package-consumer-smoke.mjs",
-        "security:audit": "npm audit --audit-level=high",
+        "security:audit": "npm audit --audit-level=moderate",
+        "verify:release": "node scripts/verify-release.mjs",
+        "sri": "node scripts/generate-sri.mjs",
         "sbom": "npm sbom --sbom-format cyclonedx --package-lock-only"
     },
     "keywords": [

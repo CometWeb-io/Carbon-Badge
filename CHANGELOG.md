@@ -1,41 +1,32 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.9] — 2026-09-23
 
 ### Security
-- Public URL identity defaults to origin + pathname (no query string) to prevent accidental PII/token leakage.
-- Runtime API origin is pinned to `https://app.cometweb.io` (loopback only for local development).
-- Removed `api-key` and `api-url` from the public Web Component attribute surface.
-- Evidence URLs must be HTTPS, credential-free, and bound to `/carbon-badge/{publicId}` for Verified claims.
-- GitHub Actions are SHA-pinned; npm publish path uses OIDC provenance (`publish.yml`).
+- Single-flight shares an immutable HTTP envelope (not a one-shot `Response`) and aborts hangers with a real `AbortSignal` timeout.
+- Expired / incomplete published snapshots fail closed to N/D (never a letter).
+- `Verified by CometWeb` requires formula ID, measurement method, score model id, freshness and bound evidence — and **only** from a fresh network response (host `localStorage` cannot mint Verified).
+- Explicit `mode="snapshot"` without `snapshot-id` fails closed (no silent API downgrade).
+- `allow-query` drops sensitive keys and uses the same allowlist for request/response identity.
+- Self-declared `green-host` no longer improves local estimate grades; partial Resource Timing / buffer overflow withholds the letter.
+- Publish workflow matches CI gates; npm audit / dependency-review fail on **moderate**.
+- Added `SECURITY.md` and Dependabot for npm + GitHub Actions.
 
 ### Fixed
-- API responses without `status` or `url` fail closed to N/D (no silent `ready`).
-- DOM-size heuristic no longer produces a carbon letter grade.
-- Local estimates wait for page load + Resource Timing quiet period before measuring.
-- Theme fallback `<style>` path updates correctly when `theme` changes.
-- `toFiniteNumberOrNull` no longer coerces booleans/arrays; `co2ToScore` rejects invalid input.
-- Cache namespace is owned (`cometweb:carbon-badge:v4:`) and no longer wipes arbitrary `cwb:` host keys.
-- Snapshot fetches use conditional revalidation (`cache: 'no-cache'`) instead of `no-store`.
-- Cross-instance request single-flight + jittered retry backoff for rate limits / 5xx.
+- Attribute changes clear stale on-screen measurements and show loading.
+- Cache TTL downgrade is honoured against existing entries; invalid `cache-ttl` values are rejected.
+- Page quiescence is bounded by a single deadline that includes `window.load`.
+- Out-of-range `cleaner_than` / negative page weight are rejected instead of clamped.
+- Error/N/D payloads set `source: null` (attempted path stays on `mode`).
 
 ### Changed
-- UI labels letters as **CometWeb Score** (`carbon-badge-bands-v1`), not Digital Carbon Rating.
-- Green hosting removes the data-centre operational term (SWDM-style) instead of a `×0.3` multiplier.
-- Events expose `measurementSource` and `retrievalSource` separately.
-- README recommends immutable CDN path + SRI; Playwright covers Chromium, Firefox and WebKit; coverage gate in CI.
+- Package version **1.0.9** (do not overwrite CDN `1.0.8` artefacts).
+- Cache schema bumped to **v5**; owned key index avoids full `localStorage` scans on cleanup.
+- Live shadow DOM is mounted with `createElement` (no live `innerHTML` assignment).
+- Release pipeline emits `dist/release-manifest.json` (SRI + sha256) alongside the npm tarball.
+- Gzip size budget raised to **10.5 KB** to absorb trust/timeout hardening without splitting the estimator entry yet.
 
-- Add `variant="compact"` and `variant="minimal"` in both themes; default layout remains unchanged. Visual switches do not reload measurements.
-
-- Simplify badge styling with flat colors, a smaller grade tile and lighter attribution.
-- Keep attribution in the content flow, wrap long labels and remove hover movement and glow.
-- Show light, dark and unavailable examples side by side in the README.
-
-
-All notable changes to `@cometweb/carbon-badge` are documented here.
-Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
-
----
+## [Unreleased]
 
 ## [1.0.8] — 2026-09-10
 

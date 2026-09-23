@@ -22,6 +22,42 @@ const CI_GLOBAL = 494;
 /** SWDM uses decimal GB, not GiB. */
 const BYTES_PER_GB = 1_000_000_000;
 
+let resourceTimingBufferOverflowed = false;
+let resourceTimingInitialized = false;
+
+/**
+ * Enlarge the Resource Timing buffer and watch for overflow so a truncated
+ * buffer cannot look like a complete measurement (CB-11).
+ */
+export function initializeResourceTiming(): void {
+    if (resourceTimingInitialized) return;
+    resourceTimingInitialized = true;
+
+    if (typeof performance === 'undefined') {
+        resourceTimingBufferOverflowed = true;
+        return;
+    }
+
+    try {
+        if (typeof performance.setResourceTimingBufferSize === 'function') {
+            performance.setResourceTimingBufferSize(2_000);
+        }
+        if (typeof performance.addEventListener === 'function') {
+            performance.addEventListener('resourcetimingbufferfull', () => {
+                resourceTimingBufferOverflowed = true;
+            });
+        }
+    } catch {
+        resourceTimingBufferOverflowed = true;
+    }
+}
+
+/** Test helper. */
+export function resetResourceTimingGuard(): void {
+    resourceTimingBufferOverflowed = false;
+    resourceTimingInitialized = false;
+}
+
 export interface EstimateResult {
     data: BadgeData;
     /** Bytes used for the formula (0 when unknown). */
@@ -44,15 +80,17 @@ export function estimateCO2(greenHost: boolean = false): BadgeData {
 }
 
 export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult {
+    initializeResourceTiming();
     const measured = measurePageWeight();
     const pageWeightBytes = measured.bytes;
-    const partial = measured.partial;
+    const partial = measured.partial || resourceTimingBufferOverflowed;
     const pageWeightKb = pageWeightBytes > 0 ? pageWeightBytes / 1024 : null;
     const dataTransferGb = pageWeightBytes / BYTES_PER_GB;
 
-    // SWDM green hosting: remove data-centre operational energy, keep network,
-    // device and embodied terms at global intensity.
-    const greenHostingFactor = greenHost ? 1 : 0;
+    // Local mode cannot independently verify green hosting. Self-declared
+    // `green-host="true"` must not improve a public letter grade.
+    void greenHost;
+    const greenHostingFactor = 0;
 
     const operationalKwhPerGb =
         OPERATIONAL_DC_KWH_PER_GB * (1 - greenHostingFactor) +
@@ -64,7 +102,9 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
         EMBODIED_USER_KWH_PER_GB;
 
     const totalCo2 =
-        pageWeightBytes > 0 && measured.measuredResourceCount > 0
+        pageWeightBytes > 0 &&
+        measured.measuredResourceCount > 0 &&
+        measured.unknownResourceCount === 0
             ? dataTransferGb *
               (operationalKwhPerGb + embodiedKwhPerGb) *
               CI_GLOBAL
@@ -81,10 +121,16 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
         score,
         cleanerThan: null,
         pageWeightKb: pageWeightKb === null ? null : Math.round(pageWeightKb),
+        // Record the assertion for telemetry, but never improve the grade from it.
         greenHost,
         verified: false,
         timestamp: Date.now(),
-        status: totalCo2 === null ? 'unknown' : partial ? 'partial' : 'ready',
+        status:
+            totalCo2 === null
+                ? partial && measured.measuredResourceCount > 0
+                    ? 'partial'
+                    : 'unknown'
+                : 'ready',
         source: 'estimate',
         formulaId:
             totalCo2 === null ? null : FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1,
@@ -168,7 +214,8 @@ function measurePageWeight(): WeightMeasure {
             const entryCount = measuredResourceCount + unknownResourceCount;
             return {
                 bytes: total,
-                partial: unknownResourceCount > 0,
+                partial:
+                    unknownResourceCount > 0 || resourceTimingBufferOverflowed,
                 measuredResourceCount,
                 unknownResourceCount,
                 observableResourceRatio:

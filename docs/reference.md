@@ -12,15 +12,15 @@
 | `variant`     | `default`                       | `default` card, `compact` strip or `minimal` transparent footer. Unknown values use the default card. Changes apply without a new measurement. |
 | `theme`       | `dark`                          | Allowlisted: `dark` or `light` |
 | `cache-ttl`   | `720`                           | Client cache TTL in minutes (12 h default). Key includes URL/mode/api/green-host/schema |
-| `green-host`  | `false`                         | Set `"true"` in `estimate` mode when the host is green-powered |
+| `green-host`  | `false`                         | Self-declared assertion in `estimate` mode — recorded but **does not** improve the letter grade |
 
 `api-url` and `api-key` are **not** part of the public Web Component API. The runtime always uses `https://app.cometweb.io/api` (loopback allowed only for local development builds). Secrets must never appear in HTML attributes — proxy through your backend if private endpoints are required.
 
 ## Modes
 
-- **`snapshot`** — fetches `GET /public/carbon-badge/id/{public_id}`. It never starts a URL scan. The response must identify the requested published snapshot, include a known `status`, a measurable `url`, and valid `measured_at` / `valid_until` dates. Missing, mismatching, stale, partial or revoked snapshots render **N/D**.
+- **`snapshot`** — fetches `GET /public/carbon-badge/id/{public_id}`. It never starts a URL scan. The response must identify the requested published snapshot, include a known `status`, a measurable `url`, valid `measured_at` / `valid_until` dates, `formula_id`, `measurement_method`, and `score_model_id` matching `carbon-badge-bands-v1`. Missing, mismatching, stale, partial, expired or revoked snapshots render **N/D**.
 - **`api`** — fetches `GET /public/carbon-badge`. Responses without `status` or `url`, or with mismatched URL identity, render **N/D**. A remote `url` never falls back to estimating the host page.
-- **`estimate`** — waits for page load + a short Resource Timing quiet period, measures transfer, then applies a simplified SWDM v4 formula. DOM size is **never** used as a carbon score input. Missing timing yields **N/D**.
+- **`estimate`** — waits for page load + a short Resource Timing quiet period, measures transfer, then applies a simplified SWDM v4 formula. DOM size is **never** used as a carbon score input. Partial Resource Timing (unknown transfer sizes) withholds the letter. Missing timing yields **N/D**.
 
 Cheap published snapshot read (server): `GET /api/public/carbon-badge/id/{public_id}` — no HTTP re-scan.
 
@@ -28,8 +28,8 @@ Cheap published snapshot read (server): `GET /api/public/carbon-badge/id/{public
 
 | Condition | Footer text |
 |-----------|-------------|
-| Published snapshot returns `verified: true`, `status: ready`, a public ID, fresh dates, and an evidence URL bound to `/carbon-badge/{publicId}` on an allowlisted CometWeb origin | **Verified by CometWeb** |
-| Estimate mode, stale/partial/revoked/unknown result, or untrusted/missing evidence | **Powered by CometWeb** |
+| Published snapshot returns `verified: true` over the **network**, `status: ready`, a public ID, `formula_id`, `measurement_method`, `score_model_id === carbon-badge-bands-v1`, fresh dates, and an evidence URL bound to `/carbon-badge/{publicId}` on an allowlisted CometWeb origin | **Verified by CometWeb** |
+| Cache hit, estimate mode, stale/partial/revoked/unknown result, or untrusted/missing evidence | **Powered by CometWeb** |
 
 Percentile (“% of modelled cohort”) is shown only when the API provides a real `cleaner_than` / benchmark — never invented.
 
@@ -59,7 +59,7 @@ E_embodied = 0.012 + 0.013 + 0.081 kWh/GB
 grid_intensity = 494 gCO₂e/kWh
 ```
 
-In `estimate` mode, `green-host="true"` sets `greenHostingFactor = 1` (removes the data-centre operational term). Network, user device, and embodied terms stay full intensity.
+In `estimate` mode, `green-host="true"` is recorded as a self-declared assertion but does not change `greenHostingFactor` (always 0 in local estimate mode). Network, user device, and embodied terms stay full intensity.
 
 ## Events
 

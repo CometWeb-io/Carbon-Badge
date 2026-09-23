@@ -35,7 +35,8 @@ export interface BadgeData {
     verified: boolean;
     timestamp: number;
     status: MeasurementStatus;
-    source: MeasurementSource;
+    /** Set only when a measurement exists; null on N/D / error. */
+    source: MeasurementSource | null;
     formulaId: string | null;
     /** Product score model id (CometWeb bands, not Digital Carbon Rating). */
     scoreModelId: string | null;
@@ -97,9 +98,10 @@ export interface APIResponse {
     evidence_url?: string | null;
     status?: MeasurementStatus | string;
     benchmark?: number | null;
+    score_model_id?: string | null;
 }
 
-export const BADGE_CACHE_SCHEMA = 4;
+export const BADGE_CACHE_SCHEMA = 5;
 export const FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1 = 'swdm-v4-lite-first-load-v1';
 export const FORMULA_ID_TRANSFER_V2 = 'cometweb_scan_transfer_v2';
 export const SCORE_MODEL_ID_COMETWEB_BANDS_V1 = 'carbon-badge-bands-v1';

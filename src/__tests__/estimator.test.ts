@@ -2,11 +2,28 @@
  * Tests for SWDM v4 estimator (estimator.ts)
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { estimateCO2, estimateCO2Detailed, co2ToScore } from '../estimator';
+import { estimateCO2, estimateCO2Detailed, co2ToScore, resetResourceTimingGuard } from '../estimator';
 
 beforeEach(() => {
+    resetResourceTimingGuard();
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
+
+function stubPerformance(entries: {
+    resource?: Array<{ transferSize?: number; encodedBodySize?: number }>;
+    navigation?: Array<{ transferSize?: number; encodedBodySize?: number }>;
+}) {
+    vi.stubGlobal('performance', {
+        getEntriesByType: (type: string) => {
+            if (type === 'resource') return entries.resource ?? [];
+            if (type === 'navigation') return entries.navigation ?? [];
+            return [];
+        },
+        setResourceTimingBufferSize: () => {},
+        addEventListener: () => {},
+        now: () => Date.now(),
+    });
+}
 
 describe('estimateCO2', () => {
     it('returns a BadgeData object with all required fields', () => {
@@ -72,7 +89,7 @@ describe('estimateCO2', () => {
         expect(result.formulaId).toBe('swdm-v4-lite-first-load-v1');
     });
 
-    it('greenHost=true produces lower CO₂ than greenHost=false', () => {
+    it('self-declared greenHost does not improve the public CO₂ letter', () => {
         vi.stubGlobal('performance', {
             getEntriesByType: (type: string) => {
                 if (type === 'resource')
@@ -98,11 +115,9 @@ describe('estimateCO2', () => {
         const green = estimateCO2(true);
         expect(green.co2Grams).not.toBeNull();
         expect(standard.co2Grams).not.toBeNull();
-        expect(green.co2Grams!).toBeCloseTo(
-            standard.co2Grams! * (121.03 / 148.2),
-            4,
-        );
-        expect(green.co2Grams!).toBeLessThan(standard.co2Grams!);
+        expect(green.co2Grams).toBe(standard.co2Grams);
+        expect(green.greenHost).toBe(true);
+        expect(standard.greenHost).toBe(false);
     });
 
     it('does not turn DOM size into a carbon grade', () => {
@@ -167,7 +182,9 @@ describe('estimateCO2', () => {
         const result = estimateCO2Detailed(false);
 
         expect(result.data.status).toBe('partial');
-        expect(result.data.co2Grams).not.toBeNull();
+        expect(result.data.co2Grams).toBeNull();
+        expect(result.data.score).toBeNull();
+        expect(result.partial).toBe(true);
         expect(result.measuredResourceCount).toBe(1);
         expect(result.unknownResourceCount).toBe(1);
         expect(result.observableResourceRatio).toBe(0.5);

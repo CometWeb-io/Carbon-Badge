@@ -1,5 +1,6 @@
 import type { BadgeData, BadgeTheme } from './types';
-import { clamp, escapeHtml } from './utils';
+import { SCORE_MODEL_ID_COMETWEB_BANDS_V1 } from './types';
+import { clamp } from './utils';
 
 const DEFAULT_EVIDENCE_URL = 'https://cometweb.io/carbon-badge';
 const ALLOWED_EVIDENCE_ORIGINS = new Set([
@@ -15,10 +16,14 @@ const SCORE_CLASS_MAP: Record<string, string> = {
     F: 'grade-f',
 };
 
-export interface BadgeMarkup {
-    markup: string;
+export interface BadgeViewModel {
     ariaLabel: string;
     verified: boolean;
+}
+
+/** Cache / local estimate must never mint a Verified claim. */
+export interface RenderTrust {
+    allowVerified: boolean;
 }
 
 function formatMeasuredDate(value: string | null): string | null {
@@ -97,109 +102,251 @@ export function evidenceHref(
     return trustedEvidenceUrl(raw)?.href || DEFAULT_EVIDENCE_URL;
 }
 
-export function buildLoadingMarkup(
-    label = 'Calculating carbon footprint…',
-): string {
-    const safeLabel = escapeHtml(label);
-    return `
-      <div role="status" aria-live="polite" aria-label="${safeLabel}">
-        <div class="cw-badge loading">
-          <div class="cw-grade grade-unknown" aria-hidden="true">…</div>
-          <div class="cw-content">
-            <div class="cw-title">Measuring…</div>
-            <div class="cw-subtitle">Estimating page-load footprint</div>
-            <div class="cw-footer" aria-hidden="true">Powered by CometWeb</div>
-          </div>
-        </div>
-      </div>
-    `;
+function element<K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    attrs: Record<string, string> = {},
+    text?: string,
+): HTMLElementTagNameMap[K] {
+    const node = document.createElement(tag);
+    for (const [name, value] of Object.entries(attrs)) {
+        node.setAttribute(name, value);
+    }
+    if (text !== undefined) {
+        node.textContent = text;
+    }
+    return node;
 }
 
-export function buildUnknownMarkup(reason: string): string {
-    const safeReason = escapeHtml(reason);
-    return `
-      <div role="status" aria-live="polite" aria-label="Carbon footprint not available">
-        <div class="cw-badge error">
-          <div class="cw-grade grade-unknown" aria-hidden="true">N/D</div>
-          <div class="cw-content">
-            <div class="cw-title">Not available</div>
-            <div class="cw-subtitle">${safeReason}</div>
-            <div class="cw-error-actions">
-              <button type="button" class="cw-retry-btn" aria-label="Retry carbon measurement">Retry</button>
-            </div>
-            <div class="cw-footer" aria-hidden="true">Powered by CometWeb</div>
-          </div>
-        </div>
-      </div>
-    `;
+function clearRoot(
+    root: ShadowRoot | Element,
+    options: { keepStyles?: boolean } = {},
+): void {
+    const keepStyle = options.keepStyles
+        ? root.querySelector('style[data-cw-theme]')
+        : null;
+
+    while (root.firstChild) {
+        root.removeChild(root.firstChild);
+    }
+    if (keepStyle) root.appendChild(keepStyle);
 }
 
-export function buildBadgeMarkup(
+function isVerifiedSnapshot(
     data: BadgeData,
-    theme: BadgeTheme,
-): BadgeMarkup {
-    const co2Grams = data.co2Grams as number;
-    const score = data.score as NonNullable<BadgeData['score']>;
-    const scoreClass = SCORE_CLASS_MAP[score] || 'grade-unknown';
-    const co2Display =
-        co2Grams < 0.01 ? '&lt;0.01' : escapeHtml(co2Grams.toFixed(2));
-    const safeScore = escapeHtml(score);
-    const verified =
+    trust: RenderTrust,
+): boolean {
+    if (!trust.allowVerified) return false;
+    return (
         data.verified === true &&
         data.status === 'ready' &&
         data.source === 'published_snapshot' &&
         data.publicId !== null &&
+        Boolean(data.formulaId) &&
+        Boolean(data.measurementMethod) &&
+        data.scoreModelId === SCORE_MODEL_ID_COMETWEB_BANDS_V1 &&
         hasFreshSnapshotProvenance(data) &&
-        trustedEvidenceUrl(data.evidenceUrl, data.publicId) !== null;
-    const footerLabel = verified
+        trustedEvidenceUrl(data.evidenceUrl, data.publicId) !== null
+    );
+}
+
+function subtitleFor(data: BadgeData): { text: string; highlight?: string } {
+    if (data.status === 'stale') {
+        return { text: 'Stale measurement — refresh required' };
+    }
+    if (data.status === 'partial') {
+        return { text: 'Partial measurement — grade withheld' };
+    }
+    if (data.source === 'published_snapshot') {
+        const measuredDate = formatMeasuredDate(data.measuredAt);
+        return {
+            text: measuredDate
+                ? `Measured ${measuredDate}`
+                : 'Published snapshot',
+        };
+    }
+    if (data.cleanerThan !== null && Number.isFinite(data.cleanerThan)) {
+        return {
+            text: 'Cleaner than ',
+            highlight: `${clamp(data.cleanerThan, 0, 100)}%`,
+        };
+    }
+    if (data.source === 'estimate') {
+        return {
+            text: data.estimatePartial
+                ? 'Local estimate (partial)'
+                : 'Local SWDM v4 estimate',
+        };
+    }
+    return { text: 'Estimated page-load footprint' };
+}
+
+export function badgeViewModel(
+    data: BadgeData,
+    trust: RenderTrust = { allowVerified: false },
+): BadgeViewModel {
+    const co2Grams = data.co2Grams as number;
+    const score = data.score as NonNullable<BadgeData['score']>;
+    const ariaCo2 = co2Grams < 0.01 ? 'less than 0.01' : co2Grams.toFixed(2);
+    return {
+        verified: isVerifiedSnapshot(data, trust),
+        ariaLabel: `Carbon footprint: ${ariaCo2}g CO₂e per visit, CometWeb Score ${score}`,
+    };
+}
+
+export function mountLoading(
+    root: ShadowRoot | Element,
+    label = 'Calculating carbon footprint…',
+    options: { keepStyles?: boolean } = {},
+): void {
+    clearRoot(root, options);
+    const status = element('div', {
+        role: 'status',
+        'aria-live': 'polite',
+        'aria-label': label,
+    });
+    const badge = element('div', { class: 'cw-badge loading' });
+    badge.append(
+        element('div', { class: 'cw-grade grade-unknown', 'aria-hidden': 'true' }, '…'),
+    );
+    const content = element('div', { class: 'cw-content' });
+    content.append(
+        element('div', { class: 'cw-title' }, 'Measuring…'),
+        element('div', { class: 'cw-subtitle' }, 'Estimating page-load footprint'),
+        element('div', { class: 'cw-footer', 'aria-hidden': 'true' }, 'Powered by CometWeb'),
+    );
+    badge.append(content);
+    status.append(badge);
+    root.append(status);
+}
+
+export function mountUnknown(
+    root: ShadowRoot | Element,
+    reason: string,
+    options: { keepStyles?: boolean } = {},
+): void {
+    clearRoot(root, options);
+    const status = element('div', {
+        role: 'status',
+        'aria-live': 'polite',
+        'aria-label': 'Carbon footprint not available',
+    });
+    const badge = element('div', { class: 'cw-badge error' });
+    badge.append(
+        element('div', { class: 'cw-grade grade-unknown', 'aria-hidden': 'true' }, 'N/D'),
+    );
+    const content = element('div', { class: 'cw-content' });
+    content.append(
+        element('div', { class: 'cw-title' }, 'Not available'),
+        element('div', { class: 'cw-subtitle' }, reason),
+    );
+    const actions = element('div', { class: 'cw-error-actions' });
+    actions.append(
+        element(
+            'button',
+            {
+                type: 'button',
+                class: 'cw-retry-btn',
+                'aria-label': 'Retry carbon measurement',
+            },
+            'Retry',
+        ),
+    );
+    content.append(
+        actions,
+        element('div', { class: 'cw-footer', 'aria-hidden': 'true' }, 'Powered by CometWeb'),
+    );
+    badge.append(content);
+    status.append(badge);
+    root.append(status);
+}
+
+export function mountBadge(
+    root: ShadowRoot | Element,
+    data: BadgeData,
+    theme: BadgeTheme,
+    options: { keepStyles?: boolean; trust?: RenderTrust } = {},
+): BadgeViewModel {
+    const trust = options.trust ?? { allowVerified: false };
+    const model = badgeViewModel(data, trust);
+    const co2Grams = data.co2Grams as number;
+    const score = data.score as NonNullable<BadgeData['score']>;
+    const scoreClass = SCORE_CLASS_MAP[score] || 'grade-unknown';
+    const co2Display = co2Grams < 0.01 ? '<0.01' : co2Grams.toFixed(2);
+    const footerLabel = model.verified
         ? 'Verified by CometWeb'
         : 'Powered by CometWeb';
+    const href = evidenceHref(data.evidenceUrl, data.publicId);
+    const subtitle = subtitleFor(data);
 
-    let subtitleHtml: string;
-    if (data.status === 'stale') {
-        subtitleHtml = 'Stale measurement — refresh required';
-    } else if (data.status === 'partial') {
-        subtitleHtml = 'Partial measurement';
-    } else if (data.source === 'published_snapshot') {
-        const measuredDate = formatMeasuredDate(data.measuredAt);
-        subtitleHtml = measuredDate
-            ? `Measured ${escapeHtml(measuredDate)}`
-            : 'Published snapshot';
-    } else if (data.cleanerThan !== null && Number.isFinite(data.cleanerThan)) {
-        const pct = escapeHtml(String(clamp(data.cleanerThan, 0, 100)));
-        subtitleHtml = `Cleaner than <span class="cw-highlight">${pct}%</span> of modelled cohort`;
-    } else if (data.source === 'estimate') {
-        subtitleHtml = data.estimatePartial
-            ? 'Local estimate (partial)'
-            : 'Local SWDM v4 estimate';
-    } else {
-        subtitleHtml = 'Estimated page-load footprint';
+    clearRoot(root, options);
+
+    const status = element('div', {
+        role: 'status',
+        'aria-live': 'polite',
+        'aria-label': model.ariaLabel,
+    });
+    const link = element('a', {
+        class: `cw-badge ${theme}`,
+        href,
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        'aria-label': `${model.ariaLabel} — CometWeb (opens in new tab)`,
+    });
+    link.append(
+        element('div', { class: `cw-grade ${scoreClass}`, 'aria-hidden': 'true' }, score),
+    );
+
+    const content = element('div', { class: 'cw-content' });
+    const title = element('div', { class: 'cw-title' }, `${co2Display}g CO₂e `);
+    title.append(element('small', {}, '/ visit'));
+
+    const subtitleEl = element('div', { class: 'cw-subtitle' }, subtitle.text);
+    if (subtitle.highlight) {
+        subtitleEl.append(
+            element('span', { class: 'cw-highlight' }, subtitle.highlight),
+            document.createTextNode(' of modelled cohort'),
+        );
     }
 
-    const ariaCo2 = co2Grams < 0.01 ? 'less than 0.01' : co2Grams.toFixed(2);
-    const ariaLabel = `Carbon footprint: ${ariaCo2}g CO₂e per visit, CometWeb Score ${score}`;
-    const safeAria = escapeHtml(ariaLabel);
-    const href = escapeHtml(evidenceHref(data.evidenceUrl, data.publicId));
+    content.append(
+        title,
+        subtitleEl,
+        element(
+            'div',
+            { class: 'cw-score-model', 'aria-hidden': 'true' },
+            `CometWeb Score ${score}`,
+        ),
+        element('div', { class: 'cw-footer', 'aria-hidden': 'true' }, footerLabel),
+    );
+    link.append(content);
+    status.append(link);
+    root.append(status);
+    return model;
+}
 
-    return {
-        verified,
-        ariaLabel,
-        markup: `
-      <div role="status" aria-live="polite" aria-label="${safeAria}">
-        <a class="cw-badge ${theme}"
-           href="${href}"
-           target="_blank"
-           rel="noopener noreferrer"
-           aria-label="${safeAria} — CometWeb (opens in new tab)">
-          <div class="cw-grade ${scoreClass}" aria-hidden="true">${safeScore}</div>
-          <div class="cw-content">
-            <div class="cw-title">${co2Display}g CO₂e <small>/ visit</small></div>
-            <div class="cw-subtitle">${subtitleHtml}</div>
-            <div class="cw-score-model" aria-hidden="true">CometWeb Score ${safeScore}</div>
-            <div class="cw-footer" aria-hidden="true">${footerLabel}</div>
-          </div>
-        </a>
-      </div>
-    `,
-    };
+/** @deprecated Prefer {@link mountLoading} — kept for string snapshot tests. */
+export function buildLoadingMarkup(
+    label = 'Calculating carbon footprint…',
+): string {
+    const host = document.createElement('div');
+    mountLoading(host, label);
+    return host.innerHTML;
+}
+
+/** @deprecated Prefer {@link mountUnknown} — kept for string snapshot tests. */
+export function buildUnknownMarkup(reason: string): string {
+    const host = document.createElement('div');
+    mountUnknown(host, reason);
+    return host.innerHTML;
+}
+
+/** @deprecated Prefer {@link mountBadge} — kept for string snapshot tests. */
+export function buildBadgeMarkup(
+    data: BadgeData,
+    theme: BadgeTheme,
+    trust: RenderTrust = { allowVerified: true },
+): BadgeViewModel & { markup: string } {
+    const host = document.createElement('div');
+    const model = mountBadge(host, data, theme, { trust });
+    return { ...model, markup: host.innerHTML };
 }

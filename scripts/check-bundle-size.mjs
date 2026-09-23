@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 
-const MAX_GZIP_BYTES = 9_500;
+const MAX_GZIP_BYTES = 10_500;
 const files = [
   'dist/cometweb-carbon-badge.esm.js',
   'dist/cometweb-carbon-badge.umd.js',

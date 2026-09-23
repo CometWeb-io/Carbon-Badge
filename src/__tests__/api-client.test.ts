@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     buildCarbonBadgeEndpoint,
     calculateRetryDelay,
@@ -9,6 +9,11 @@ import {
 } from '../api-client';
 
 describe('api-client helpers', () => {
+    afterEach(() => {
+        clearInFlightRequests();
+        vi.unstubAllGlobals();
+    });
+
     it('accepts only the trusted CometWeb origin (plus loopback)', () => {
         expect(validateApiUrl('https://app.cometweb.io/api').href).toBe(
             'https://app.cometweb.io/api',
@@ -62,19 +67,55 @@ describe('api-client helpers', () => {
         expect(calculateRetryDelay(0, 99_000)).toBe(30_000);
     });
 
-    it('deduplicates in-flight requests', async () => {
-        clearInFlightRequests();
-        let calls = 0;
-        const factory = () => {
-            calls += 1;
-            return Promise.resolve('ok');
-        };
+    it('serves identical concurrent callers without sharing a consumed body', async () => {
+        let fetchCalls = 0;
+
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => {
+                fetchCalls += 1;
+                return new Response(
+                    JSON.stringify({
+                        url: 'https://example.com',
+                        status: 'ready',
+                        co2_grams: 0.2,
+                    }),
+                    {
+                        status: 200,
+                        headers: { 'Content-Type': 'application/json' },
+                    },
+                );
+            }),
+        );
+
         const [a, b] = await Promise.all([
-            fetchSingleFlight('k', factory),
-            fetchSingleFlight('k', factory),
+            fetchSingleFlight('same-key', { headers: {} }),
+            fetchSingleFlight('same-key', { headers: {} }),
         ]);
-        expect(a).toBe('ok');
-        expect(b).toBe('ok');
-        expect(calls).toBe(1);
+
+        expect(JSON.parse(a.bodyText)).toEqual(JSON.parse(b.bodyText));
+        expect(fetchCalls).toBe(1);
+        expect(a.ok).toBe(true);
+        expect(b.status).toBe(200);
+    });
+
+    it('aborts hanging fetches via timeout', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(
+                (_url: string, init?: RequestInit) =>
+                    new Promise((_resolve, reject) => {
+                        init?.signal?.addEventListener('abort', () => {
+                            reject(
+                                new DOMException('Aborted', 'AbortError'),
+                            );
+                        });
+                    }),
+            ),
+        );
+
+        await expect(
+            fetchSingleFlight('hang', {}, 20),
+        ).rejects.toMatchObject({ name: 'AbortError' });
     });
 });
