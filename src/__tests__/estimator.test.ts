@@ -57,7 +57,7 @@ describe('estimateCO2', () => {
             score: expect.stringMatching(/^(A\+|A|B|C|D|F)$/),
             cleanerThan: null,
             pageWeightKb: expect.any(Number),
-            greenHost: false,
+            greenHost: null,
             timestamp: expect.any(Number),
             formulaId: 'swdm-v4-lite-first-load-v1',
             scoreModelId: 'carbon-badge-bands-v1',
@@ -116,8 +116,8 @@ describe('estimateCO2', () => {
         expect(green.co2Grams).not.toBeNull();
         expect(standard.co2Grams).not.toBeNull();
         expect(green.co2Grams).toBe(standard.co2Grams);
-        expect(green.greenHost).toBe(true);
-        expect(standard.greenHost).toBe(false);
+        expect(green.greenHost).toBeNull();
+        expect(standard.greenHost).toBeNull();
     });
 
     it('does not turn DOM size into a carbon grade', () => {

@@ -94,8 +94,8 @@
     </div>
 
     <div class="demo-section">
-        <span class="demo-label">Dark Theme — Green Host Override</span>
-        <cometweb-carbon-badge mode="estimate" theme="dark" green-host="true"></cometweb-carbon-badge>
+        <span class="demo-label">Dark Theme — Compact</span>
+        <cometweb-carbon-badge mode="estimate" theme="dark" variant="compact"></cometweb-carbon-badge>
     </div>
 
     <div class="code-block">
@@ -103,13 +103,18 @@
 &lt;script src="cometweb-carbon-badge.esm.js" type="module"&gt;&lt;/script&gt;
 
 &lt;cometweb-carbon-badge
-    url="https://example.com"
     mode="estimate"
     theme="dark"
 &gt;&lt;/cometweb-carbon-badge&gt;</pre>
     </div>
 
-    <script type="module" src="./dist/cometweb-carbon-badge.esm.js"></script>
+    <script type="module">
+        if (new URL(location.href).searchParams.get('source') === '1') {
+            await import('./src/index.ts');
+        } else {
+            await import('./dist/cometweb-carbon-badge.esm.js');
+        }
+    </script>
 </body>
 
 </html>

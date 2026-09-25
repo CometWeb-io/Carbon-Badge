@@ -6,13 +6,13 @@
 
 | Attribute     | Default                         | Description |
 |---------------|---------------------------------|-------------|
-| `url`         | current page URL                | Page to measure (API mode). Public identity is **origin + pathname** — all query parameters are stripped by default |
+| `url`         | current page URL                | Page to measure (API mode). Public identity is **origin + pathname** — all query parameters and fragments are always stripped |
 | `snapshot-id` | —                               | Published CometWeb public ID; selects snapshot mode when `mode` is omitted |
-| `mode`        | `api` or `snapshot` with ID     | `snapshot` — published result; `api` — CometWeb public API; `estimate` — client-side SWDM v4 lite |
+| `mode`        | `estimate` or `snapshot` with ID     | `snapshot` — published result; `api` — CometWeb public API; `estimate` — client-side SWDM v4 lite |
 | `variant`     | `default`                       | `default` card, `compact` strip or `minimal` transparent footer. Unknown values use the default card. Changes apply without a new measurement. |
 | `theme`       | `dark`                          | Allowlisted: `dark` or `light` |
-| `cache-ttl`   | `720`                           | Client cache TTL in minutes (12 h default). Key includes URL/mode/api/green-host/schema |
-| `green-host`  | `false`                         | Self-declared assertion in `estimate` mode — recorded but **does not** improve the letter grade |
+| `cache-ttl`   | `720`                           | Client cache TTL in API mode only (12 h default). Key includes URL/mode/api/green-host/schema |
+| `green-host`  | `false`                         | Legacy attribute; ignored in local mode, never verifies hosting or improves the grade |
 
 `api-url` and `api-key` are **not** part of the public Web Component API. The runtime always uses `https://app.cometweb.io/api` (loopback allowed only for local development builds). Secrets must never appear in HTML attributes — proxy through your backend if private endpoints are required.
 
@@ -28,7 +28,7 @@ Cheap published snapshot read (server): `GET /api/public/carbon-badge/id/{public
 
 | Condition | Footer text |
 |-----------|-------------|
-| Published snapshot returns `verified: true` over the **network**, `status: ready`, a public ID, `formula_id`, `measurement_method`, `score_model_id === carbon-badge-bands-v1`, fresh dates, and an evidence URL bound to `/carbon-badge/{publicId}` on an allowlisted CometWeb origin | **Verified by CometWeb** |
+| Published snapshot returns `status: ready` over the **network**, a public ID, `formula_id`, `measurement_method`, `score_model_id === carbon-badge-bands-v1`, fresh dates, and an evidence URL bound to `/carbon-badge/{publicId}` on an allowlisted CometWeb origin | **Published by CometWeb** |
 | Cache hit, estimate mode, stale/partial/revoked/unknown result, or untrusted/missing evidence | **Powered by CometWeb** |
 
 Percentile (“% of modelled cohort”) is shown only when the API provides a real `cleaner_than` / benchmark — never invented.
@@ -37,7 +37,7 @@ Percentile (“% of modelled cohort”) is shown only when the API provides a re
 
 Letters are the **CometWeb Carbon Score** (`carbon-badge-bands-v1`). They are product bands, **not** the public [Digital Carbon Rating Scale](https://sustainablewebdesign.org/digital-carbon-ratings/).
 
-| CometWeb Score | CO₂e / visit | Meaning |
+| CometWeb Score | CO₂e / page load | Meaning |
 |-------|--------------|---------|
 | A+    | &lt; 0.10 g  | Exceptionally clean |
 | A     | &lt; 0.20 g  | Very clean |
@@ -59,14 +59,20 @@ E_embodied = 0.012 + 0.013 + 0.081 kWh/GB
 grid_intensity = 494 gCO₂e/kWh
 ```
 
-In `estimate` mode, `green-host="true"` is recorded as a self-declared assertion but does not change `greenHostingFactor` (always 0 in local estimate mode). Network, user device, and embodied terms stay full intensity.
+In `estimate` mode, `green-host="true"` is ignored and does not change `greenHostingFactor` (always 0 in local estimate mode). Network, user device, and embodied terms stay full intensity.
+
+## Privacy and trust
+
+URL query parameters and fragments are never retained in badge identity, requests, cache keys or event URLs. The removed `allow-query` attribute is ignored. The page pathname is still visible to an explicitly selected remote API: never use those modes for private pages.
+
+“Published” describes the source of a snapshot, not domain ownership, independent verification or certification. `originMatched` only reports an API placement check; it is `null` when absent or not obtained over the network. No missing proof URL is manufactured from a public ID.
 
 ## Events
 
 | Event | When |
 |-------|------|
-| `cometweb:badge-load` | Data rendered (`detail`: url, co2Grams, score, measurementSource, retrievalSource, status, formulaId, scoreModelId, …) |
-| `cometweb:badge-error` | Measurement failed (`detail`: sanitized `url`, `mode`, `reason`, `status`) |
+| `cometweb:badge-load` | Data rendered (`detail`: url, co2Grams, score, measurementSource, retrievalSource, status, formulaId, scoreModelId, published, originMatched, …) |
+| `cometweb:badge-error` | Measurement failed (`detail`: sanitized `url`, `mode`, `reason`, `status`, resource visibility counts) |
 
 ```js
 document.querySelector('cometweb-carbon-badge')

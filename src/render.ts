@@ -16,14 +16,18 @@ const SCORE_CLASS_MAP: Record<string, string> = {
     F: 'grade-f',
 };
 
-export interface BadgeViewModel {
-    ariaLabel: string;
-    verified: boolean;
+function measuredHost(raw: string): string {
+    try { return new URL(raw).hostname; } catch { return 'This page'; }
 }
 
-/** Cache / local estimate must never mint a Verified claim. */
+export interface BadgeViewModel {
+    ariaLabel: string;
+    published: boolean;
+}
+
+/** Cache / local estimate cannot establish published provenance. */
 export interface RenderTrust {
-    allowVerified: boolean;
+    allowPublished: boolean;
 }
 
 function formatMeasuredDate(value: string | null): string | null {
@@ -94,10 +98,7 @@ export function evidenceHref(
     if (publicId) {
         const bound = trustedEvidenceUrl(raw, publicId);
         if (bound) return bound.href;
-        return new URL(
-            `/carbon-badge/${encodeURIComponent(publicId.toLowerCase())}`,
-            'https://cometweb.io',
-        ).href;
+        return DEFAULT_EVIDENCE_URL;
     }
     return trustedEvidenceUrl(raw)?.href || DEFAULT_EVIDENCE_URL;
 }
@@ -131,13 +132,12 @@ function clearRoot(
     if (keepStyle) root.appendChild(keepStyle);
 }
 
-function isVerifiedSnapshot(
+function isPublishedSnapshot(
     data: BadgeData,
     trust: RenderTrust,
 ): boolean {
-    if (!trust.allowVerified) return false;
+    if (!trust.allowPublished) return false;
     return (
-        data.verified === true &&
         data.status === 'ready' &&
         data.source === 'published_snapshot' &&
         data.publicId !== null &&
@@ -182,14 +182,14 @@ function subtitleFor(data: BadgeData): { text: string; highlight?: string } {
 
 export function badgeViewModel(
     data: BadgeData,
-    trust: RenderTrust = { allowVerified: false },
+    trust: RenderTrust = { allowPublished: false },
 ): BadgeViewModel {
     const co2Grams = data.co2Grams as number;
     const score = data.score as NonNullable<BadgeData['score']>;
     const ariaCo2 = co2Grams < 0.01 ? 'less than 0.01' : co2Grams.toFixed(2);
     return {
-        verified: isVerifiedSnapshot(data, trust),
-        ariaLabel: `Carbon footprint: ${ariaCo2}g CO₂e per visit, CometWeb Score ${score}`,
+        published: isPublishedSnapshot(data, trust),
+        ariaLabel: `${measuredHost(data.url)}: estimated ${ariaCo2}g CO₂e per page load, CometWeb Score ${score}`,
     };
 }
 
@@ -222,23 +222,32 @@ export function mountLoading(
 export function mountUnknown(
     root: ShadowRoot | Element,
     reason: string,
-    options: { keepStyles?: boolean } = {},
+    options: { keepStyles?: boolean; data?: BadgeData } = {},
 ): void {
     clearRoot(root, options);
     const status = element('div', {
         role: 'status',
         'aria-live': 'polite',
-        'aria-label': 'Carbon footprint not available',
+        'aria-label': `${measuredHost(options.data?.url || '')}: carbon footprint not available`,
     });
     const badge = element('div', { class: 'cw-badge error' });
     badge.append(
         element('div', { class: 'cw-grade grade-unknown', 'aria-hidden': 'true' }, 'N/D'),
     );
     const content = element('div', { class: 'cw-content' });
+    if (options.data?.url) content.append(element('div', { class: 'cw-host' }, measuredHost(options.data.url)));
     content.append(
         element('div', { class: 'cw-title' }, 'Not available'),
         element('div', { class: 'cw-subtitle' }, reason),
     );
+    const measured = options.data?.measuredResourceCount;
+    const unknown = options.data?.unknownResourceCount;
+    if (measured !== undefined && unknown !== undefined) {
+        const visibility = unknown === 0 && options.data?.estimatePartial
+            ? `${measured} resource sizes visible; timing history incomplete`
+            : `${measured} of ${measured + unknown} resource sizes visible`;
+        content.append(element('div', { class: 'cw-subtitle' }, visibility));
+    }
     const actions = element('div', { class: 'cw-error-actions' });
     actions.append(
         element(
@@ -253,7 +262,7 @@ export function mountUnknown(
     );
     content.append(
         actions,
-        element('div', { class: 'cw-footer', 'aria-hidden': 'true' }, 'Powered by CometWeb'),
+        element('a', { class: 'cw-footer', href: DEFAULT_EVIDENCE_URL, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Carbon Badge by CometWeb (opens in new tab)' }, 'Powered by CometWeb'),
     );
     badge.append(content);
     status.append(badge);
@@ -266,14 +275,14 @@ export function mountBadge(
     theme: BadgeTheme,
     options: { keepStyles?: boolean; trust?: RenderTrust } = {},
 ): BadgeViewModel {
-    const trust = options.trust ?? { allowVerified: false };
+    const trust = options.trust ?? { allowPublished: false };
     const model = badgeViewModel(data, trust);
     const co2Grams = data.co2Grams as number;
     const score = data.score as NonNullable<BadgeData['score']>;
     const scoreClass = SCORE_CLASS_MAP[score] || 'grade-unknown';
     const co2Display = co2Grams < 0.01 ? '<0.01' : co2Grams.toFixed(2);
-    const footerLabel = model.verified
-        ? 'Verified by CometWeb'
+    const footerLabel = model.published
+        ? 'Published by CometWeb'
         : 'Powered by CometWeb';
     const href = evidenceHref(data.evidenceUrl, data.publicId);
     const subtitle = subtitleFor(data);
@@ -298,7 +307,7 @@ export function mountBadge(
 
     const content = element('div', { class: 'cw-content' });
     const title = element('div', { class: 'cw-title' }, `${co2Display}g CO₂e `);
-    title.append(element('small', {}, '/ visit'));
+    title.append(element('small', {}, '/ load'));
 
     const subtitleEl = element('div', { class: 'cw-subtitle' }, subtitle.text);
     if (subtitle.highlight) {
@@ -309,6 +318,7 @@ export function mountBadge(
     }
 
     content.append(
+        element('div', { class: 'cw-host' }, measuredHost(data.url)),
         title,
         subtitleEl,
         element(
@@ -344,7 +354,7 @@ export function buildUnknownMarkup(reason: string): string {
 export function buildBadgeMarkup(
     data: BadgeData,
     theme: BadgeTheme,
-    trust: RenderTrust = { allowVerified: true },
+    trust: RenderTrust = { allowPublished: true },
 ): BadgeViewModel & { markup: string } {
     const host = document.createElement('div');
     const model = mountBadge(host, data, theme, { trust });

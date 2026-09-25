@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test';
 
 test.describe('carbon badge lifecycle (CB-29)', () => {
   test('registers CE, renders estimate without invented empty A+, unmount is clean', async ({
@@ -28,7 +28,7 @@ test.describe('carbon badge lifecycle (CB-29)', () => {
     });
 
     expect(state.status).toMatch(/^(ready|partial|unknown)$/);
-    if (state.status === 'unknown') {
+    if (state.status !== 'ready') {
       expect(state.score).toBeNull();
       expect(state.co2Grams).toBeNull();
       expect(state.text).toContain('N/D');

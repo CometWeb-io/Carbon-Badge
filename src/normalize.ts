@@ -16,75 +16,15 @@ import { SCORE_MODEL_ID_COMETWEB_BANDS_V1 } from './types';
 import { co2ToScore } from './estimator';
 import { toFiniteNumberOrNull } from './utils';
 import { validateSnapshotId } from './api-client';
-
-/** Query keys that must never enter allow-query / public identity. */
-const SENSITIVE_QUERY_KEY =
-    /^(token|access_token|refresh_token|api[_-]?key|secret|password|passwd|session|sid|jwt|auth|authorization|code|email)$/i;
-
-/**
- * Drop duplicates and sensitive keys from an allow-query attribute.
- */
-export function sanitizeAllowedQueryKeys(
-    keys: readonly string[],
-): string[] {
-    return [
-        ...new Set(
-            keys
-                .map((key) => key.trim().toLowerCase())
-                .filter(Boolean)
-                .filter((key) => !SENSITIVE_QUERY_KEY.test(key)),
-        ),
-    ];
-}
-
-/**
- * Canonical public URL identity.
- *
- * By default strips **all** query parameters (privacy-safe). Pass an explicit
- * allowlist only when a product surface intentionally needs semantic query keys.
- */
-export function canonicalizeBadgeUrl(
-    raw: string,
-    allowedQueryKeys: readonly string[] = [],
-): string | null {
-    const trimmed = (raw || '').trim();
-    if (!trimmed) return null;
-    try {
-        const u = new URL(trimmed);
-        if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
-        if (u.username || u.password) return null;
-        u.hash = '';
-
-        const allowlist = new Set(
-            sanitizeAllowedQueryKeys(allowedQueryKeys),
-        );
-        const safeQuery = new URLSearchParams();
-        for (const [key, value] of u.searchParams.entries()) {
-            if (allowlist.has(key.toLowerCase())) {
-                safeQuery.append(key, value);
-            }
-        }
-        safeQuery.sort();
-        const qs = safeQuery.toString();
-        u.search = qs ? `?${qs}` : '';
-
-        let path = u.pathname;
-        if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
-        u.pathname = path || '/';
-        u.hostname = u.hostname.toLowerCase();
-        return u.toString();
-    } catch {
-        return null;
-    }
-}
+import { canonicalizeBadgeUrl } from './url';
+export { canonicalizeBadgeUrl } from './url';
 
 function sameUrlIdentity(
     a: string,
     b: string,
-    allowedQueryKeys: readonly string[] = [],
 ): boolean {
-    const ca = canonicalizeBadgeUrl(a, allowedQueryKeys);
-    const cb = canonicalizeBadgeUrl(b, allowedQueryKeys);
+    const ca = canonicalizeBadgeUrl(a);
+    const cb = canonicalizeBadgeUrl(b);
     if (!ca || !cb) return false;
     return ca === cb;
 }
@@ -131,7 +71,6 @@ function nonNegativeOrNull(value: unknown): number | null {
 export interface NormalizeApiOptions {
     requestedUrl: string;
     requestedSnapshotId?: string | null;
-    allowedQueryKeys?: readonly string[];
     now?: number;
 }
 
@@ -145,7 +84,6 @@ export function parseApiResponse(
 ): BadgeData | null {
     if (!apiData || typeof apiData !== 'object') return null;
 
-    const allowed = options.allowedQueryKeys ?? [];
     const now = options.now ?? Date.now();
 
     let publicId: string | null = null;
@@ -189,12 +127,12 @@ export function parseApiResponse(
     const responseUrl =
         typeof apiData.url === 'string' ? apiData.url.trim() : '';
     if (!responseUrl) return null;
-    const canonicalResponseUrl = canonicalizeBadgeUrl(responseUrl, allowed);
+    const canonicalResponseUrl = canonicalizeBadgeUrl(responseUrl);
     if (!canonicalResponseUrl) return null;
 
     if (
         !options.requestedSnapshotId &&
-        !sameUrlIdentity(responseUrl, options.requestedUrl, allowed)
+        !sameUrlIdentity(responseUrl, options.requestedUrl)
     ) {
         return null;
     }
@@ -283,7 +221,8 @@ export function parseApiResponse(
         cleanerThan,
         pageWeightKb,
         greenHost,
-        verified: apiData.verified === true,
+        originMatched: apiData.verification_reason === 'origin_match'
+            ? true : apiData.verification_reason === 'origin_mismatch' ? false : null,
         timestamp: now,
         status,
         source: measurementSource,

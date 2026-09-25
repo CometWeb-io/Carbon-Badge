@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './test';
 
 async function gotoWithResponse(page: Page, payload: Record<string, unknown>) {
   await page.route('**/public/carbon-badge?**', async (route) => {
@@ -46,7 +46,7 @@ test.describe('API status contracts', () => {
     });
 
     await expect(page.locator('cometweb-carbon-badge')).toContainText('Measured');
-    const proofLink = page.getByRole('link', { name: /Carbon footprint:/ });
+    const proofLink = page.getByRole('link', { name: /example\.com: estimated 0\.23g CO₂e per page load/ });
     await expect(proofLink).toHaveAttribute(
       'href',
       'https://cometweb.io/carbon-badge/abcdef0123',
@@ -101,7 +101,7 @@ test.describe('API status contracts', () => {
     });
 
     await expect(page.locator('cometweb-carbon-badge')).toContainText('N/D');
-    await expect(page.locator('cometweb-carbon-badge')).not.toContainText('Verified by CometWeb');
+    await expect(page.locator('cometweb-carbon-badge')).not.toContainText('Published by CometWeb');
     await expect(page.locator('cometweb-carbon-badge')).not.toContainText('Stale measurement');
   });
 });

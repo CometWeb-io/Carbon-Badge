@@ -53,6 +53,7 @@ const BASE_STYLES = `
     line-height: 1;
   }
   .cw-content { flex: 1; min-width: 0; }
+  .cw-host { margin-bottom: 3px; font-size: 11px; color: #59665e; overflow-wrap: anywhere; }
   .cw-title {
     display: flex;
     flex-wrap: wrap;
@@ -68,6 +69,8 @@ const BASE_STYLES = `
   .cw-score-model { margin-top: 4px; font-size: 10px; font-weight: 600; color: #4a5750; letter-spacing: 0.01em; }
   .cw-highlight { font-weight: 600; color: var(--cw-accent); }
   .cw-footer { margin-top: 7px; font-size: 10px; font-weight: 400; color: #66736a; line-height: 1.4; }
+  a.cw-footer { display: inline-block; text-underline-offset: 3px; padding-block: 4px; }
+  a.cw-footer:focus-visible { outline: 2px solid var(--cw-accent); outline-offset: 3px; }
   .grade-aplus, .grade-a { background: #e0f3e8; color: #14613d; }
   .grade-b { background: #edf2d9; color: #4d621d; }
   .grade-c { background: #fff1cf; color: #805608; }
@@ -137,6 +140,7 @@ const THEME_STYLES: Record<BadgeTheme, string> = {
     :host { --cw-accent: #8ad8ad; }
     .cw-badge { background: #19231d; border-color: #39483f; color: #f0f5f2; }
     .cw-subtitle, .cw-title small { color: #b5c4ba; }
+    .cw-host, .cw-score-model { color: #b5c4ba; }
     .cw-footer { color: #a0b2a6; }
     .grade-aplus, .grade-a { background: #254a35; color: #a3e6bd; }
     .grade-b { background: #3d4926; color: #d3e7a1; }

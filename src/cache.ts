@@ -1,5 +1,5 @@
 /**
- * @cometweb/carbon-badge — localStorage caching layer (schema v5)
+ * @cometweb/carbon-badge — localStorage caching layer (schema v6, API only)
  *
  * Key includes canonical URL, mode, api-url hash, green-host, and schema version
  * so attribute changes never silently reuse a stale measurement.
@@ -104,7 +104,7 @@ export function getCached(key: string): BadgeData | null {
         // localStorage is host-controlled — never treat cache as Verified proof.
         return {
             ...(parsed.data as unknown as BadgeData),
-            verified: false,
+            originMatched: null,
         };
     } catch {
         return null;
@@ -179,7 +179,7 @@ export function getFreshCached(
 
         return {
             ...(parsed.data as unknown as BadgeData),
-            verified: false,
+            originMatched: null,
         };
     } catch {
         try {

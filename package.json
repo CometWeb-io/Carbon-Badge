@@ -1,6 +1,6 @@
 {
     "name": "@cometweb/carbon-badge",
-    "version": "1.0.9",
+    "version": "2.0.0",
     "description": "Lightweight web component badge showing CO₂e emissions per page view — powered by CometWeb & SWDM v4",
     "main": "dist/cometweb-carbon-badge.umd.js",
     "module": "dist/cometweb-carbon-badge.esm.js",
@@ -29,6 +29,8 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "test:e2e": "playwright test",
+        "test:e2e:source": "BADGE_E2E_SOURCE=1 playwright test",
+        "test:marketing": "playwright test --config playwright.marketing.config.ts",
         "clean": "node scripts/clean.mjs",
         "size:check": "node scripts/check-bundle-size.mjs",
         "pack:check": "npm pack --dry-run",

@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.0.0] — Unreleased
+
+### Breaking
+- Local estimation is the default; `url` alone no longer requests a server scan. Use explicit `mode="api"` only for an intentional service dependency.
+- Remove `allow-query` and `sanitizeAllowedQueryKeys`; query parameters and fragments are always stripped.
+- Replace `BadgeData.verified` and event `verified`/`backendVerified` with `originMatched` (placement only) and event `published` (snapshot provenance). No ownership verification is claimed.
+- Cache schema v6; local estimates do not read or write localStorage.
+
+### Fixed
+- Missing navigation timing, invalid resource sizes and overflow cannot produce a grade.
+- Incomplete estimates retain resource visibility counts and link back to the free tool.
+- Show the measured hostname and improve dark-theme supporting text contrast.
+- Never manufacture a proof URL when the API omits one; published provenance uses “Published by CometWeb”.
+
+### Distribution
+- Free installation does not depend on npm publication or Insight availability. Build and verify the pinned self-hosted artifact before offering installation code.
+
 ## [1.0.9] — 2026-09-23
 
 ### Security

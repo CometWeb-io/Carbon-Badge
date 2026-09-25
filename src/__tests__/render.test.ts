@@ -16,7 +16,7 @@ const readyData: BadgeData = {
     cleanerThan: 82.5,
     pageWeightKb: 120,
     greenHost: true,
-    verified: true,
+    originMatched: true,
     timestamp: 1,
     status: 'ready',
     source: 'published_snapshot',
@@ -71,11 +71,11 @@ describe('badge render model', () => {
     it('renders verified markup only with a trusted bound evidence URL', () => {
         const host = document.createElement('div');
         const model = mountBadge(host, readyData, 'dark', {
-            trust: { allowVerified: true },
+            trust: { allowPublished: true },
         });
-        expect(model.verified).toBe(true);
+        expect(model.published).toBe(true);
         expect(host.querySelector('.cw-footer')?.textContent).toBe(
-            'Verified by CometWeb',
+            'Published by CometWeb',
         );
         expect(host.querySelector('a')?.getAttribute('href')).toBe(
             'https://cometweb.io/carbon-badge/abcdef0123',
@@ -92,14 +92,14 @@ describe('badge render model', () => {
             untrustedHost,
             { ...readyData, evidenceUrl: 'https://evil.test/proof' },
             'light',
-            { trust: { allowVerified: true } },
+            { trust: { allowPublished: true } },
         );
-        expect(untrusted.verified).toBe(false);
+        expect(untrusted.published).toBe(false);
         expect(untrustedHost.querySelector('.cw-footer')?.textContent).toBe(
             'Powered by CometWeb',
         );
         expect(untrustedHost.querySelector('a')?.getAttribute('href')).toBe(
-            'https://cometweb.io/carbon-badge/abcdef0123',
+            'https://cometweb.io/carbon-badge',
         );
     });
 
@@ -109,9 +109,9 @@ describe('badge render model', () => {
             'dark',
         );
 
-        expect(result.verified).toBe(false);
+        expect(result.published).toBe(false);
         expect(result.markup).toContain('Estimated page-load footprint');
-        expect(result.markup).not.toContain('Verified by CometWeb');
+        expect(result.markup).not.toContain('Published by CometWeb');
     });
 
     it('does not claim verification without a fresh dated snapshot', () => {
@@ -124,7 +124,7 @@ describe('badge render model', () => {
             'dark',
         );
 
-        expect(result.verified).toBe(false);
+        expect(result.published).toBe(false);
         expect(result.markup).toContain('Powered by CometWeb');
     });
 });

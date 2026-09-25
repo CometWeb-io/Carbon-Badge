@@ -6,7 +6,6 @@ import {
     canonicalizeBadgeUrl,
     parseApiResponse,
     normalizeBadgeData,
-    sanitizeAllowedQueryKeys,
 } from '../normalize';
 import { SCORE_MODEL_ID_COMETWEB_BANDS_V1 } from '../types';
 
@@ -31,22 +30,20 @@ describe('canonicalizeBadgeUrl', () => {
         ).toBe('https://example.com/catalog');
     });
 
-    it('keeps only allowlisted query keys when provided', () => {
+    it('strips semantic query keys too', () => {
         expect(
             canonicalizeBadgeUrl(
                 'https://example.com/c?item=123&email=x@y.z&utm_source=a',
-                ['item'],
             ),
-        ).toBe('https://example.com/c?item=123');
+        ).toBe('https://example.com/c');
     });
 
-    it('drops sensitive keys even when allowlisted', () => {
+    it('strips sensitive and mixed-case keys', () => {
         expect(
             canonicalizeBadgeUrl(
-                'https://example.com/c?item=1&token=secret',
-                ['item', 'token'],
+                'https://example.com/c?item=1&ID_TOKEN=secret&client_secret=x&x-amz-signature=y',
             ),
-        ).toBe('https://example.com/c?item=1');
+        ).toBe('https://example.com/c');
     });
 
     it('returns null for non-http URLs', () => {
@@ -58,14 +55,6 @@ describe('canonicalizeBadgeUrl', () => {
         expect(
             canonicalizeBadgeUrl('https://user:password@example.com/'),
         ).toBeNull();
-    });
-});
-
-describe('sanitizeAllowedQueryKeys', () => {
-    it('dedupes and strips sensitive keys', () => {
-        expect(
-            sanitizeAllowedQueryKeys(['Item', 'item', 'token', 'email', 'id']),
-        ).toEqual(['item', 'id']);
     });
 });
 
@@ -127,7 +116,7 @@ describe('parseApiResponse', () => {
         ).toBeNull();
     });
 
-    it('uses allow-query consistently for request/response identity', () => {
+    it('uses query-free identity for request, response and returned data', () => {
         const data = parseApiResponse(
             {
                 url: 'https://example.com/product?id=123',
@@ -136,10 +125,9 @@ describe('parseApiResponse', () => {
             },
             {
                 requestedUrl: 'https://example.com/product?id=123',
-                allowedQueryKeys: ['id'],
             },
         );
-        expect(data?.url).toBe('https://example.com/product?id=123');
+        expect(data?.url).toBe('https://example.com/product');
         expect(
             parseApiResponse(
                 {
@@ -149,10 +137,9 @@ describe('parseApiResponse', () => {
                 },
                 {
                     requestedUrl: 'https://example.com/product?id=123',
-                    allowedQueryKeys: ['id'],
                 },
             ),
-        ).toBeNull();
+        ).toMatchObject({ url: 'https://example.com/product' });
     });
 
     it('trusts snapshot identity over the embedding page URL', () => {
@@ -397,7 +384,7 @@ describe('normalizeBadgeData', () => {
             cleanerThan: 10,
             pageWeightKb: 1,
             greenHost: false,
-            verified: false,
+            originMatched: null,
             timestamp: 1,
             status: 'ready',
             source: 'api',

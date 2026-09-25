@@ -5,8 +5,8 @@
  * Powered by CometWeb & a documented SWDM v4 first-load lite approximation.
  *
  * Usage:
- *   <script type="module" src="https://unpkg.com/@cometweb/carbon-badge@1.0.9/dist/cometweb-carbon-badge.esm.js"></script>
- *   <cometweb-carbon-badge snapshot-id="<published_public_id>"></cometweb-carbon-badge>
+ *   <script type="module" src="/vendor/cometweb-carbon-badge.esm.js"></script>
+ *   <cometweb-carbon-badge theme="dark"></cometweb-carbon-badge>
  *
  * Or via npm:
  *   import { registerCarbonBadge } from '@cometweb/carbon-badge';
@@ -19,7 +19,6 @@ export {
     canonicalizeBadgeUrl,
     parseApiResponse,
     normalizeBadgeData,
-    sanitizeAllowedQueryKeys,
 } from './normalize';
 export type { HttpEnvelope } from './api-client';
 export {

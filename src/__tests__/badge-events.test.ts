@@ -289,7 +289,7 @@ describe('API response validation', () => {
             { timeout: 2000 },
         );
         expect(el.score).toBeNull();
-        expect(el.shadowRoot?.innerHTML).not.toContain('Verified by CometWeb');
+        expect(el.shadowRoot?.innerHTML).not.toContain('Published by CometWeb');
     });
 
     it('ignores removed api-key / untrusted api-url attributes', async () => {
@@ -371,7 +371,7 @@ describe('API response validation', () => {
 
         expect(el.score).toBe('B');
         expect(el.shadowRoot?.innerHTML).toContain('Powered by CometWeb');
-        expect(el.shadowRoot?.innerHTML).not.toContain('Verified by CometWeb');
+        expect(el.shadowRoot?.innerHTML).not.toContain('Published by CometWeb');
     });
 
     it('shows Verified footer only for a published snapshot with trusted evidence', async () => {
@@ -409,7 +409,7 @@ describe('API response validation', () => {
         });
 
         expect(el.score).toBe('A');
-        expect(el.shadowRoot?.innerHTML).toContain('Verified by CometWeb');
+        expect(el.shadowRoot?.innerHTML).toContain('Published by CometWeb');
     });
 
     it('omits % of web when cleaner_than is absent (CB-07)', async () => {
@@ -679,7 +679,7 @@ describe('snapshot-first owner mode', () => {
         document.body.appendChild(second);
         await vi.waitFor(() => expect(second.score).toBe('B'), { timeout: 1000 });
 
-        expect(second.shadowRoot?.innerHTML).toContain('Verified by CometWeb');
+        expect(second.shadowRoot?.innerHTML).toContain('Published by CometWeb');
         expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 });
@@ -745,7 +745,7 @@ describe('strict modes and Verified trust boundary', () => {
                 cleanerThan: null,
                 pageWeightKb: 100,
                 greenHost: false,
-                verified: true,
+                originMatched: true,
                 timestamp: Date.now(),
                 status: 'ready',
                 source: 'published_snapshot',
@@ -770,12 +770,12 @@ describe('strict modes and Verified trust boundary', () => {
 
         await vi.waitFor(() => expect(el.score).toBe('A'), { timeout: 2000 });
         expect(el.shadowRoot?.innerHTML).toContain('Powered by CometWeb');
-        expect(el.shadowRoot?.innerHTML).not.toContain('Verified by CometWeb');
-        expect(detail?.verified).toBe(false);
+        expect(el.shadowRoot?.innerHTML).not.toContain('Published by CometWeb');
+        expect(detail?.published).toBe(false);
         expect(detail?.retrievalSource).toBe('cache');
     });
 
-    it('emits effective verified separately from backendVerified (CB-16)', async () => {
+    it('emits publication separately from request-origin placement (CB-16)', async () => {
         vi.stubGlobal(
             'fetch',
             vi.fn().mockResolvedValue({
@@ -791,6 +791,7 @@ describe('strict modes and Verified trust boundary', () => {
                             score: 'A',
                             co2_grams: 0.15,
                             verified: true,
+                            verification_reason: 'origin_match',
                             public_id: 'abcdef0123',
                             measurement_source: 'published_snapshot',
                             measured_at: new Date(Date.now() - 60_000).toISOString(),
@@ -815,9 +816,10 @@ describe('strict modes and Verified trust boundary', () => {
         document.body.appendChild(el);
 
         await vi.waitFor(() => expect(detail).not.toBeNull(), { timeout: 2000 });
-        expect(detail.verified).toBe(true);
-        expect(detail.backendVerified).toBe(true);
-        expect(el.shadowRoot?.innerHTML).toContain('Verified by CometWeb');
+        expect(detail.published).toBe(true);
+        expect(detail.originMatched).toBe(true);
+        expect(detail).not.toHaveProperty('backendVerified');
+        expect(el.shadowRoot?.innerHTML).toContain('Published by CometWeb');
     });
 });
 

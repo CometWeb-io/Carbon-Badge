@@ -7,6 +7,7 @@
  */
 
 import type { BadgeData, ScoreLetter } from './types';
+import { canonicalizeBadgeUrl } from './url';
 import {
     FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1,
     SCORE_MODEL_ID_COMETWEB_BANDS_V1,
@@ -39,6 +40,12 @@ export function initializeResourceTiming(): void {
     }
 
     try {
+        // A late embed cannot recover entries discarded before it installed
+        // the overflow listener. The browser's default capacity is 250: once
+        // already saturated, fail closed even if the host enlarged its buffer.
+        if (performance.getEntriesByType?.('resource').length >= 250) {
+            resourceTimingBufferOverflowed = true;
+        }
         if (typeof performance.setResourceTimingBufferSize === 'function') {
             performance.setResourceTimingBufferSize(2_000);
         }
@@ -102,7 +109,7 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
         EMBODIED_USER_KWH_PER_GB;
 
     const totalCo2 =
-        pageWeightBytes > 0 &&
+        !partial && pageWeightBytes > 0 &&
         measured.measuredResourceCount > 0 &&
         measured.unknownResourceCount === 0
             ? dataTransferGb *
@@ -114,16 +121,15 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
         typeof location !== 'undefined' && location.href ? location.href : '';
 
     const data: BadgeData = {
-        url: href,
+        url: canonicalizeBadgeUrl(href) || '',
         publicId: null,
         co2Grams:
             totalCo2 === null ? null : Math.round(totalCo2 * 10000) / 10000,
         score,
         cleanerThan: null,
         pageWeightKb: pageWeightKb === null ? null : Math.round(pageWeightKb),
-        // Record the assertion for telemetry, but never improve the grade from it.
-        greenHost,
-        verified: false,
+        greenHost: null,
+        originMatched: null,
         timestamp: Date.now(),
         status:
             totalCo2 === null
@@ -197,12 +203,12 @@ function measurePageWeight(): WeightMeasure {
 
         let total = 0;
         let measuredResourceCount = 0;
-        let unknownResourceCount = 0;
+        let unknownResourceCount = navigation.length === 0 ? 1 : 0;
         const entries = [...navigation.slice(0, 1), ...resources];
 
         for (const entry of entries) {
             const bytes = entry.transferSize || entry.encodedBodySize || 0;
-            if (bytes > 0) {
+            if (Number.isFinite(bytes) && bytes > 0) {
                 total += bytes;
                 measuredResourceCount++;
             } else {

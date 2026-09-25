@@ -1,5 +1,5 @@
 /**
- * Tests for localStorage caching layer (cache.ts) — schema v5
+ * Tests for localStorage caching layer (cache.ts) — schema v6
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
@@ -23,7 +23,7 @@ const mockData: BadgeData = {
     cleanerThan: 72,
     pageWeightKb: 480,
     greenHost: false,
-    verified: false,
+    originMatched: null,
     timestamp: Date.now(),
     status: 'ready',
     source: 'api',
@@ -70,7 +70,7 @@ beforeEach(() => {
 
 describe('buildCacheKey', () => {
     it('uses the owned cometweb namespace', () => {
-        expect(key.startsWith('cometweb:carbon-badge:v5:')).toBe(true);
+        expect(key.startsWith('cometweb:carbon-badge:v6:')).toBe(true);
     });
 
     it('changes when mode or green-host changes', () => {
@@ -114,9 +114,9 @@ describe('setCache / getCached', () => {
     });
 
     it('strips verified from host-controlled cache entries', () => {
-        setCache(key, { ...mockData, verified: true }, 720);
-        expect(getCached(key)?.verified).toBe(false);
-        expect(getFreshCached(key)?.verified).toBe(false);
+        setCache(key, { ...mockData, originMatched: true }, 720);
+        expect(getCached(key)?.originMatched).toBe(null);
+        expect(getFreshCached(key)?.originMatched).toBe(null);
     });
 
     it('getFreshCached returns null for expired entries and removes them', () => {

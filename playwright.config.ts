@@ -26,9 +26,11 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
   },
   webServer: {
-    command: 'node scripts/serve-static.mjs 4177',
+    command: process.env.BADGE_E2E_SOURCE === '1'
+      ? 'node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4177 --strictPort'
+      : 'node scripts/serve-static.mjs 4177',
     port: 4177,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 });
