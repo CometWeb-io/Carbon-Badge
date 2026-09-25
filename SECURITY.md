@@ -11,7 +11,7 @@ than expecting in-place patches of historical artefacts.
 
 Please **do not** open a public GitHub issue for security reports.
 
-Email **security@cometweb.io** with:
+Email **hello@cometweb.io** with:
 
 - affected package version / CDN URL / git SHA
 - reproduction steps or a minimal PoC
