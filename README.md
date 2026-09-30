@@ -12,7 +12,7 @@ The badge uses [CometWeb](https://cometweb.io) and documents a **SWDM v4 first-l
 
 For a website owner, use a published CometWeb snapshot. It is a cheap, stable read for visitors: it does not start a scan, the result is dated and the proof link points to the published measurement.
 
-**This release is 1.0.10.** npm still serves 1.0.6 until tag `v1.0.10` is published. Git tag `v1.0.9` never reached the registry. Pin the embed to this version. The integrity hash is from `NODE_ENV=production npm run build && npm run sri` on this commit. `https://cometweb.io/scripts/carbon-badge/` is a separate site copy and does not serve this file.
+**This release is 1.0.10** on npm, unpkg and jsDelivr. Git tag `v1.0.9` never reached the registry. Pin the embed to this version. The integrity hash matches the published file. The same bytes are also at `https://cometweb.io/scripts/carbon-badge/1.0.10/cometweb-carbon-badge.esm.js`. The cometweb.io product embed stays on site release 2.0.0, which is a different build.
 
 ```html
 <script
@@ -57,7 +57,7 @@ Omit `variant` for the default card. All variants retain the estimate, source/st
 
 ## Install and add it to a page
 
-The code in this repository is version **1.0.9**. Build it locally when you need the exact behavior documented here:
+The code in this repository is version **1.0.10**. Build it locally when you need the exact behavior documented here:
 
 ```bash
 git clone https://github.com/CometWeb-io/Carbon-Badge.git
