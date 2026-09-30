@@ -12,15 +12,13 @@ The badge uses [CometWeb](https://cometweb.io) and documents a **SWDM v4 first-l
 
 For a website owner, use a published CometWeb snapshot. It is a cheap, stable read for visitors: it does not start a scan, the result is dated and the proof link points to the published measurement.
 
-**Publish status (verified 2026-09-30):** this git tree is **1.0.9**, but npm latest is still **1.0.6** (`npm view @cometweb/carbon-badge version`). The versioned CometWeb CDN path for 1.0.9 is **not** served today (`https://cometweb.io/scripts/carbon-badge/1.0.9/cometweb-carbon-badge.esm.js` → 404). The unversioned `https://cometweb.io/scripts/cometweb-carbon-badge.esm.js` returns 200 but is discouraged for production embeds because it is not pinned.
-
-Until 1.0.9 is published to the `@cometweb` npm scope, use a **verified** published asset. Both of these return HTTP 200 and the same bytes:
+**This release is 1.0.10.** npm still serves 1.0.6 until tag `v1.0.10` is published. Git tag `v1.0.9` never reached the registry. Pin the embed to this version. The integrity hash is from `NODE_ENV=production npm run build && npm run sri` on this commit. `https://cometweb.io/scripts/carbon-badge/` is a separate site copy and does not serve this file.
 
 ```html
 <script
   type="module"
-  src="https://unpkg.com/@cometweb/carbon-badge@1.0.6/dist/cometweb-carbon-badge.esm.js"
-  integrity="sha384-0375Gcfv3Wm1oashOSNriSbnoJyM3jCVrOW7LneHf129cPFCmlmtQ6ofCYzuQPxv"
+  src="https://unpkg.com/@cometweb/carbon-badge@1.0.10/dist/cometweb-carbon-badge.esm.js"
+  integrity="sha384-oH1uwtH4vymZPLdy+3pCQkOGgrT3gilrMT+ZPv/4VKU/x4C+antJkZK1FYZWnJSc"
   crossorigin="anonymous"></script>
 <cometweb-carbon-badge
   snapshot-id="<published_public_id>"
@@ -28,9 +26,7 @@ Until 1.0.9 is published to the `@cometweb` npm scope, use a **verified** publis
 </cometweb-carbon-badge>
 ```
 
-Equivalent jsDelivr URL (also HTTP 200): `https://cdn.jsdelivr.net/npm/@cometweb/carbon-badge@1.0.6/dist/cometweb-carbon-badge.esm.js`.
-
-For the exact 1.0.9 behavior in this repository, build locally (`npm ci && npm run build`) and host `dist/cometweb-carbon-badge.esm.js` yourself. After `npm run build && npm run sri`, copy the real `esm.sri` value from `dist/release-manifest.json` — do not invent an integrity hash.
+Equivalent jsDelivr URL: `https://cdn.jsdelivr.net/npm/@cometweb/carbon-badge@1.0.10/dist/cometweb-carbon-badge.esm.js`.
 
 Replace `<published_public_id>` with the lowercase hexadecimal public ID from the published CometWeb ecology snapshot. Keep `mode` unset: a `snapshot-id` automatically selects snapshot mode. Do **not** set `mode="api"` or `mode="estimate"` together with `snapshot-id` — that combination fails closed (N/D) instead of silently estimating a local grade. Use live `api` mode only when you explicitly want URL-based measurement and omit `snapshot-id`.
 

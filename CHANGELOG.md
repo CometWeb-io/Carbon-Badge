@@ -26,16 +26,20 @@
 - Release pipeline emits `dist/release-manifest.json` (SRI + sha256) alongside the npm tarball.
 - Gzip size budget raised to **10.5 KB** to absorb trust/timeout hardening without splitting the estimator entry yet.
 
-## [Unreleased]
+## [1.0.10] — 2026-09-30
+
+First release published to npm after 1.0.6. Git tag `v1.0.9` was not accepted by the registry.
 
 ### Security
 - `scripts/serve-static.mjs` refuses symlinks and requires `realpath` containment under the serve root (closes in-tree symlink LFI against the Playwright static server).
 
 ### Fixed
 - `snapshot-id` combined with `mode="api"` or `mode="estimate"` fails closed (N/D) instead of silently ignoring the published id.
-- README embed docs no longer point at a 404 versioned CDN URL or a placeholder SRI; npm publish lag (git 1.0.9 vs registry 1.0.6) is stated explicitly.
+- README embed uses the published 1.0.10 asset and a hash from the production build.
 - Bundle size claim aligned to the measured ~10 KB gzip production ESM (was a stale ~8 KB figure).
 - Declared `engines.node` as `>=22` (Vitest 5 / CI Node 24); removed stale committed `bun.lock` that failed `bun install --frozen-lockfile` while CI uses `npm ci`.
+
+## [Unreleased]
 
 ## [1.0.8] — 2026-09-10
 
