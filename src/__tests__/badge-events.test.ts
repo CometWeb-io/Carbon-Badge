@@ -517,7 +517,54 @@ describe('snapshot-first owner mode', () => {
         });
     });
 
-    it('keeps explicit api mode as the URL-based compatibility path', async () => {
+    it('fail-closes when snapshot-id is combined with mode=api', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+
+        const el = document.createElement(TAG) as any;
+        el.setAttribute('url', 'https://example.com');
+        el.setAttribute('snapshot-id', 'abcdef0123');
+        el.setAttribute('mode', 'api');
+
+        document.body.appendChild(el);
+        await vi.waitFor(
+            () =>
+                expect(el.shadowRoot?.innerHTML).toContain(
+                    'Conflicting mode and snapshot-id',
+                ),
+            { timeout: 2000 },
+        );
+        expect(el.score).toBeNull();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('fail-closes when snapshot-id is combined with mode=estimate', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+        vi.stubGlobal('performance', {
+            getEntriesByType: () => [
+                { transferSize: 200 * 1024, encodedBodySize: 200 * 1024 },
+            ],
+            now: () => Date.now(),
+        });
+
+        const el = document.createElement(TAG) as any;
+        el.setAttribute('snapshot-id', 'abcdef0123');
+        el.setAttribute('mode', 'estimate');
+
+        document.body.appendChild(el);
+        await vi.waitFor(
+            () =>
+                expect(el.shadowRoot?.innerHTML).toContain(
+                    'Conflicting mode and snapshot-id',
+                ),
+            { timeout: 2000 },
+        );
+        expect(el.score).toBeNull();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps explicit api mode without snapshot-id as the URL-based path', async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,
             status: 200,
@@ -529,7 +576,6 @@ describe('snapshot-first owner mode', () => {
 
         const el = document.createElement(TAG) as any;
         el.setAttribute('url', 'https://example.com');
-        el.setAttribute('snapshot-id', 'abcdef0123');
         el.setAttribute('mode', 'api');
 
         document.body.appendChild(el);

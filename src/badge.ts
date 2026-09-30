@@ -165,10 +165,15 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         if (!raw) {
             return this.snapshotId ? 'snapshot' : 'api';
         }
-        if (raw === 'estimate' || raw === 'api' || raw === 'snapshot') {
-            return raw;
+        if (raw !== 'estimate' && raw !== 'api' && raw !== 'snapshot') {
+            return null;
         }
-        return null;
+        // Fail closed: snapshot-id with api/estimate is ambiguous and must
+        // not silently ignore the published id in favour of a local grade.
+        if (this.snapshotId && raw !== 'snapshot') {
+            return null;
+        }
+        return raw;
     }
 
     private get theme(): BadgeTheme {
@@ -275,6 +280,18 @@ export class CometWebCarbonBadge extends HTMLElementBase {
 
         const mode = this.mode;
         if (!mode) {
+            const rawMode = this.getAttribute('mode')?.trim();
+            if (
+                this.snapshotId &&
+                (rawMode === 'api' || rawMode === 'estimate')
+            ) {
+                console.warn(
+                    LOG_PREFIX,
+                    'snapshot-id cannot be combined with mode=api or mode=estimate; omit mode for snapshot, or remove snapshot-id.',
+                );
+                this.renderUnknown('Conflicting mode and snapshot-id');
+                return;
+            }
             this.renderUnknown('Invalid badge mode');
             return;
         }

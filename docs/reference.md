@@ -7,8 +7,8 @@
 | Attribute     | Default                         | Description |
 |---------------|---------------------------------|-------------|
 | `url`         | current page URL                | Page to measure (API mode). Public identity is **origin + pathname** — all query parameters are stripped by default |
-| `snapshot-id` | —                               | Published CometWeb public ID; selects snapshot mode when `mode` is omitted |
-| `mode`        | `api` or `snapshot` with ID     | `snapshot` — published result; `api` — CometWeb public API; `estimate` — client-side SWDM v4 lite |
+| `snapshot-id` | —                               | Published CometWeb public ID; selects snapshot mode when `mode` is omitted. Combined with `mode="api"` or `mode="estimate"` fails closed (N/D) |
+| `mode`        | `api` or `snapshot` with ID     | `snapshot` — published result; `api` — CometWeb public API; `estimate` — client-side SWDM v4 lite. Do not set `api`/`estimate` together with `snapshot-id` |
 | `variant`     | `default`                       | `default` card, `compact` strip or `minimal` transparent footer. Unknown values use the default card. Changes apply without a new measurement. |
 | `theme`       | `dark`                          | Allowlisted: `dark` or `light` |
 | `cache-ttl`   | `720`                           | Client cache TTL in minutes (12 h default). Key includes URL/mode/api/green-host/schema |
@@ -21,6 +21,7 @@
 - **`snapshot`** — fetches `GET /public/carbon-badge/id/{public_id}`. It never starts a URL scan. The response must identify the requested published snapshot, include a known `status`, a measurable `url`, valid `measured_at` / `valid_until` dates, `formula_id`, `measurement_method`, and `score_model_id` matching `carbon-badge-bands-v1`. Missing, mismatching, stale, partial, expired or revoked snapshots render **N/D**.
 - **`api`** — fetches `GET /public/carbon-badge`. Responses without `status` or `url`, or with mismatched URL identity, render **N/D**. A remote `url` never falls back to estimating the host page.
 - **`estimate`** — waits for page load + a short Resource Timing quiet period, measures transfer, then applies a simplified SWDM v4 formula. DOM size is **never** used as a carbon score input. Partial Resource Timing (unknown transfer sizes) withholds the letter. Missing timing yields **N/D**.
+- **Attribute conflict** — `snapshot-id` together with `mode="api"` or `mode="estimate"` fails closed to **N/D** (`Conflicting mode and snapshot-id`). Omit `mode` to use the published snapshot, or omit `snapshot-id` for api/estimate.
 
 Cheap published snapshot read (server): `GET /api/public/carbon-badge/id/{public_id}` — no HTTP re-scan.
 
