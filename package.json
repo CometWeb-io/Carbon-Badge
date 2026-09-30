@@ -59,6 +59,9 @@
     "publishConfig": {
         "access": "public"
     },
+    "engines": {
+        "node": ">=22"
+    },
     "devDependencies": {
         "@playwright/test": "^1.51.0",
         "@rollup/plugin-terser": "^1.0.0",

@@ -1,6 +1,6 @@
 # CometWeb Carbon Badge
 
-Web component that shows estimated **CO₂e per page view**, its source and measurement status. It has zero runtime dependencies, light/dark themes, three visual variants and a bundle of about **8 KB gzipped** with a CI size budget.
+Web component that shows estimated **CO₂e per page view**, its source and measurement status. It has zero runtime dependencies, light/dark themes, three visual variants and a production ESM bundle of about **10 KB gzipped** (measured after `NODE_ENV=production npm run build`; CI budget is 10.5 KB).
 
 ![A page or API result becomes a carbon estimate with its method and status; missing data stays N/D.](docs/media/overview.svg)
 
@@ -12,16 +12,15 @@ The badge uses [CometWeb](https://cometweb.io) and documents a **SWDM v4 first-l
 
 For a website owner, use a published CometWeb snapshot. It is a cheap, stable read for visitors: it does not start a scan, the result is dated and the proof link points to the published measurement.
 
-Prefer an immutable, versioned asset with Subresource Integrity. After
-`npm run build && npm run sri`, copy the `esm.sri` value from
-`dist/release-manifest.json` into the `integrity` attribute. Do not hotlink an
-unversioned `/scripts/cometweb-carbon-badge.esm.js` path in production embeds.
+**Publish status (verified 2026-09-30):** this git tree is **1.0.9**, but npm latest is still **1.0.6** (`npm view @cometweb/carbon-badge version`). The versioned CometWeb CDN path for 1.0.9 is **not** served today (`https://cometweb.io/scripts/carbon-badge/1.0.9/cometweb-carbon-badge.esm.js` → 404). The unversioned `https://cometweb.io/scripts/cometweb-carbon-badge.esm.js` returns 200 but is discouraged for production embeds because it is not pinned.
+
+Until 1.0.9 is published to the `@cometweb` npm scope, use a **verified** published asset. Both of these return HTTP 200 and the same bytes:
 
 ```html
 <script
   type="module"
-  src="https://cometweb.io/scripts/carbon-badge/1.0.9/cometweb-carbon-badge.esm.js"
-  integrity="sha384-<from dist/release-manifest.json esm.sri>"
+  src="https://unpkg.com/@cometweb/carbon-badge@1.0.6/dist/cometweb-carbon-badge.esm.js"
+  integrity="sha384-0375Gcfv3Wm1oashOSNriSbnoJyM3jCVrOW7LneHf129cPFCmlmtQ6ofCYzuQPxv"
   crossorigin="anonymous"></script>
 <cometweb-carbon-badge
   snapshot-id="<published_public_id>"
@@ -29,7 +28,11 @@ unversioned `/scripts/cometweb-carbon-badge.esm.js` path in production embeds.
 </cometweb-carbon-badge>
 ```
 
-Replace `<published_public_id>` with the lowercase hexadecimal public ID from the published CometWeb ecology snapshot. Keep `mode` unset: a `snapshot-id` automatically selects snapshot mode. Use live `api` mode only when you explicitly want URL-based measurement on the visitor path.
+Equivalent jsDelivr URL (also HTTP 200): `https://cdn.jsdelivr.net/npm/@cometweb/carbon-badge@1.0.6/dist/cometweb-carbon-badge.esm.js`.
+
+For the exact 1.0.9 behavior in this repository, build locally (`npm ci && npm run build`) and host `dist/cometweb-carbon-badge.esm.js` yourself. After `npm run build && npm run sri`, copy the real `esm.sri` value from `dist/release-manifest.json` — do not invent an integrity hash.
+
+Replace `<published_public_id>` with the lowercase hexadecimal public ID from the published CometWeb ecology snapshot. Keep `mode` unset: a `snapshot-id` automatically selects snapshot mode. Do **not** set `mode="api"` or `mode="estimate"` together with `snapshot-id` — that combination fails closed (N/D) instead of silently estimating a local grade. Use live `api` mode only when you explicitly want URL-based measurement and omit `snapshot-id`.
 
 Snapshot results include their measurement date, freshness deadline, method, formula ID, status and evidence URL. Expired, revoked, missing or partial data is never labelled as verified and never becomes a trustworthy letter grade.
 
@@ -81,8 +84,8 @@ For a bundler, install the built package (`npm install /path/to/Carbon-Badge`) a
 | Mode | Data source | Setup |
 | --- | --- | --- |
 | `snapshot` | Published CometWeb measurement | Set `snapshot-id`; recommended owner path |
-| `estimate` | Current page's browser transfer data and simplified SWDM v4 calculation | Explicitly set `mode="estimate"` |
-| `api` (default) | CometWeb public carbon-badge endpoint | Network access; optionally set `url` |
+| `estimate` | Current page's browser transfer data and simplified SWDM v4 calculation | Explicitly set `mode="estimate"` (do not also set `snapshot-id`) |
+| `api` (default) | CometWeb public carbon-badge endpoint | Network access; optionally set `url` (do not also set `snapshot-id`) |
 
 An unavailable measurement displays **N/D**, not a made-up A+ score. A remote URL in API mode never falls back to estimating the host page. API mode is an external service dependency; the component's MIT license does not guarantee service availability.
 
@@ -101,8 +104,8 @@ An unavailable measurement displays **N/D**, not a made-up A+ score. A remote UR
 | Attribute | Default | Description |
 | --- | --- | --- |
 | `url` | current page URL | Page to measure in API mode; public identity is origin + pathname (query stripped by default) |
-| `snapshot-id` | — | Published CometWeb public ID; selects snapshot mode when `mode` is omitted |
-| `mode` | `api` or `snapshot` with ID | `snapshot` — published result; `api` — live public API; `estimate` — client-side SWDM v4 first-load lite |
+| `snapshot-id` | — | Published CometWeb public ID; selects snapshot mode when `mode` is omitted. Conflicts with `mode="api"` / `mode="estimate"` (fails closed) |
+| `mode` | `api` or `snapshot` with ID | `snapshot` — published result; `api` — live public API; `estimate` — client-side SWDM v4 first-load lite. Do not combine `api`/`estimate` with `snapshot-id` |
 | `variant` | `default` | `default` card, `compact` strip or `minimal` transparent signature; changes do not reload data |
 | `theme` | `dark` | Allowlisted: `dark` or `light` |
 | `cache-ttl` | `720` | Client cache TTL in minutes for API/estimate mode, capped by the server `valid_until` deadline |

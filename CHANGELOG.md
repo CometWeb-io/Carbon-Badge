@@ -28,6 +28,15 @@
 
 ## [Unreleased]
 
+### Security
+- `scripts/serve-static.mjs` refuses symlinks and requires `realpath` containment under the serve root (closes in-tree symlink LFI against the Playwright static server).
+
+### Fixed
+- `snapshot-id` combined with `mode="api"` or `mode="estimate"` fails closed (N/D) instead of silently ignoring the published id.
+- README embed docs no longer point at a 404 versioned CDN URL or a placeholder SRI; npm publish lag (git 1.0.9 vs registry 1.0.6) is stated explicitly.
+- Bundle size claim aligned to the measured ~10 KB gzip production ESM (was a stale ~8 KB figure).
+- Declared `engines.node` as `>=22` (Vitest 5 / CI Node 24); removed stale committed `bun.lock` that failed `bun install --frozen-lockfile` while CI uses `npm ci`.
+
 ## [1.0.8] — 2026-09-10
 
 ### Fixed
