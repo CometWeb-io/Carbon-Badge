@@ -1,20 +1,36 @@
 {
     "name": "@cometweb/carbon-badge",
-    "version": "1.0.10",
+    "version": "2.0.2",
     "description": "Lightweight web component badge showing CO₂e emissions per page view — powered by CometWeb & SWDM v4",
     "main": "dist/cometweb-carbon-badge.umd.js",
     "module": "dist/cometweb-carbon-badge.esm.js",
     "types": "dist/index.d.ts",
     "exports": {
         ".": {
+            "types": "./dist/index.d.ts",
             "import": "./dist/cometweb-carbon-badge.esm.js",
-            "require": "./dist/cometweb-carbon-badge.umd.js",
-            "types": "./dist/index.d.ts"
+            "require": "./dist/cometweb-carbon-badge.umd.js"
+        },
+        "./embed": {
+            "types": "./dist/embed.d.ts",
+            "import": "./dist/embed/carbon-badge.js"
+        },
+        "./api": {
+            "types": "./dist/api.d.ts",
+            "import": "./dist/carbon-badge-api.esm.js",
+            "require": "./dist/carbon-badge-api.cjs"
         }
     },
     "files": [
         "dist/**/*.js",
+        "dist/**/*.cjs",
         "dist/**/*.d.ts",
+        "dist/release-manifest.json",
+        "dist/embed/module-graph.json",
+        "docs/reference.md",
+        "docs/*.json",
+        "docs/media/*.png",
+        "docs/media/*.svg",
         "!dist/__tests__",
         "README.md",
         "LICENSE",
@@ -29,6 +45,8 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "test:e2e": "playwright test",
+        "test:e2e:source": "BADGE_E2E_SOURCE=1 playwright test",
+        "test:marketing": "playwright test --config playwright.marketing.config.ts",
         "clean": "node scripts/clean.mjs",
         "size:check": "node scripts/check-bundle-size.mjs",
         "pack:check": "npm pack --dry-run",
@@ -49,7 +67,7 @@
         "ecology",
         "green-web"
     ],
-    "author": "CometWeb <hello@cometweb.io>",
+    "author": "Maciej Zmitrukiewicz <hello@cometweb.io>",
     "license": "MIT",
     "homepage": "https://cometweb.io",
     "repository": {
@@ -63,6 +81,7 @@
         "node": ">=22"
     },
     "devDependencies": {
+        "@axe-core/playwright": "4.13.0",
         "@playwright/test": "^1.51.0",
         "@rollup/plugin-terser": "^1.0.0",
         "@rollup/plugin-typescript": "^12.1.0",

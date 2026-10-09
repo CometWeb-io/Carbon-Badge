@@ -7,8 +7,10 @@
  */
 
 import type { BadgeData, ScoreLetter } from './types';
+import { canonicalizeBadgeUrl } from './url';
 import {
     FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1,
+    FACTOR_SET_ID_SWDM_V4,
     SCORE_MODEL_ID_COMETWEB_BANDS_V1,
 } from './types';
 
@@ -24,14 +26,16 @@ const BYTES_PER_GB = 1_000_000_000;
 
 let resourceTimingBufferOverflowed = false;
 let resourceTimingInitialized = false;
+let initialDocumentUrl: string | null = null;
 
 /**
- * Enlarge the Resource Timing buffer and watch for overflow so a truncated
+ * Watch for overflow without changing the host page timing budget; a truncated
  * buffer cannot look like a complete measurement (CB-11).
  */
 export function initializeResourceTiming(): void {
     if (resourceTimingInitialized) return;
     resourceTimingInitialized = true;
+    initialDocumentUrl = typeof location !== 'undefined' ? location.href : null;
 
     if (typeof performance === 'undefined') {
         resourceTimingBufferOverflowed = true;
@@ -39,8 +43,11 @@ export function initializeResourceTiming(): void {
     }
 
     try {
-        if (typeof performance.setResourceTimingBufferSize === 'function') {
-            performance.setResourceTimingBufferSize(2_000);
+        // A late embed cannot recover entries discarded before it installed
+        // the overflow listener. The browser's default capacity is 250: once
+        // already saturated, fail closed even if the host enlarged its buffer.
+        if (performance.getEntriesByType?.('resource').length >= 250) {
+            resourceTimingBufferOverflowed = true;
         }
         if (typeof performance.addEventListener === 'function') {
             performance.addEventListener('resourcetimingbufferfull', () => {
@@ -56,6 +63,7 @@ export function initializeResourceTiming(): void {
 export function resetResourceTimingGuard(): void {
     resourceTimingBufferOverflowed = false;
     resourceTimingInitialized = false;
+    initialDocumentUrl = null;
 }
 
 export interface EstimateResult {
@@ -83,7 +91,15 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
     initializeResourceTiming();
     const measured = measurePageWeight();
     const pageWeightBytes = measured.bytes;
-    const partial = measured.partial || resourceTimingBufferOverflowed;
+    const href = typeof location !== 'undefined' ? location.href : '';
+    let documentUrlChanged = Boolean(initialDocumentUrl && href !== initialDocumentUrl);
+    if (measured.navigationUrl && href) {
+        const original = new URL(measured.navigationUrl);
+        const current = new URL(href);
+        original.hash = current.hash = '';
+        documentUrlChanged ||= original.href !== current.href;
+    }
+    const partial = measured.partial || resourceTimingBufferOverflowed || documentUrlChanged || measured.cachedBodyBytes > 0;
     const pageWeightKb = pageWeightBytes > 0 ? pageWeightBytes / 1024 : null;
     const dataTransferGb = pageWeightBytes / BYTES_PER_GB;
 
@@ -102,7 +118,7 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
         EMBODIED_USER_KWH_PER_GB;
 
     const totalCo2 =
-        pageWeightBytes > 0 &&
+        !partial && pageWeightBytes > 0 &&
         measured.measuredResourceCount > 0 &&
         measured.unknownResourceCount === 0
             ? dataTransferGb *
@@ -110,23 +126,25 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
               CI_GLOBAL
             : null;
     const score = totalCo2 === null ? null : co2ToScore(totalCo2);
-    const href =
-        typeof location !== 'undefined' && location.href ? location.href : '';
 
     const data: BadgeData = {
-        url: href,
+        url: canonicalizeBadgeUrl(href) || '',
         publicId: null,
         co2Grams:
-            totalCo2 === null ? null : Math.round(totalCo2 * 10000) / 10000,
+            totalCo2,
         score,
         cleanerThan: null,
         pageWeightKb: pageWeightKb === null ? null : Math.round(pageWeightKb),
-        // Record the assertion for telemetry, but never improve the grade from it.
-        greenHost,
-        verified: false,
+        pageWeightKiB: pageWeightKb,
+        pageWeightKB: pageWeightBytes > 0 ? pageWeightBytes / 1_000 : null,
+        factorSetId: FACTOR_SET_ID_SWDM_V4,
+        measurementWindowStartMs: 0,
+        measurementWindowEndMs: typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : undefined,
+        greenHost: null,
+        originMatched: null,
         timestamp: Date.now(),
         status:
-            totalCo2 === null
+            documentUrlChanged ? 'stale' : totalCo2 === null
                 ? partial && measured.measuredResourceCount > 0
                     ? 'partial'
                     : 'unknown'
@@ -141,6 +159,16 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
         measuredAt: totalCo2 === null ? null : new Date().toISOString(),
         validUntil: null,
         evidenceUrl: null,
+        reasonCode: documentUrlChanged ? 'document-url-changed'
+            : resourceTimingBufferOverflowed ? 'timing-buffer-overflow'
+            : measured.unknownResourceCount > 0 ? 'unobservable-resource'
+            : measured.cachedBodyBytes > 0 ? 'cache-outside-first-load'
+            : totalCo2 === null ? 'timing-unavailable' : undefined,
+        measurementScope: 'document-first-load',
+        networkTransferBytes: pageWeightBytes,
+        encodedBodyBytes: measured.encodedBodyBytes,
+        cachedBodyBytes: measured.cachedBodyBytes,
+        transferUpperBoundBytes: partial ? null : pageWeightBytes,
         estimatePartial: partial || totalCo2 === null,
         measuredResourceCount: measured.measuredResourceCount,
         unknownResourceCount: measured.unknownResourceCount,
@@ -160,7 +188,10 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
 }
 
 interface WeightMeasure {
+    navigationUrl?: string;
     bytes: number;
+    encodedBodyBytes: number;
+    cachedBodyBytes: number;
     partial: boolean;
     measuredResourceCount: number;
     unknownResourceCount: number;
@@ -174,6 +205,8 @@ interface WeightMeasure {
 function measurePageWeight(): WeightMeasure {
     const unavailable = (): WeightMeasure => ({
         bytes: 0,
+        encodedBodyBytes: 0,
+        cachedBodyBytes: 0,
         partial: true,
         measuredResourceCount: 0,
         unknownResourceCount: 0,
@@ -196,24 +229,34 @@ function measurePageWeight(): WeightMeasure {
         ) as PerformanceNavigationTiming[];
 
         let total = 0;
+        let encodedBodyBytes = 0;
+        let cachedBodyBytes = 0;
         let measuredResourceCount = 0;
-        let unknownResourceCount = 0;
+        let unknownResourceCount = navigation.length === 0 ? 1 : 0;
         const entries = [...navigation.slice(0, 1), ...resources];
 
         for (const entry of entries) {
-            const bytes = entry.transferSize || entry.encodedBodySize || 0;
-            if (bytes > 0) {
+            const bytes = entry.transferSize;
+            const encoded = entry.encodedBodySize;
+            if (Number.isFinite(bytes) && bytes >= 0 && (bytes > 0 || Number.isFinite(encoded) && encoded > 0)) {
                 total += bytes;
+                if (Number.isFinite(encoded) && encoded >= 0) {
+                    encodedBodyBytes += encoded;
+                    if (bytes < encoded) cachedBodyBytes += encoded;
+                }
                 measuredResourceCount++;
             } else {
                 unknownResourceCount++;
             }
         }
 
-        if (total > 0 && measuredResourceCount > 0) {
+        if (Number.isFinite(total) && Number.isFinite(encodedBodyBytes) && measuredResourceCount > 0) {
             const entryCount = measuredResourceCount + unknownResourceCount;
             return {
+                navigationUrl: navigation[0]?.name,
                 bytes: total,
+                encodedBodyBytes,
+                cachedBodyBytes,
                 partial:
                     unknownResourceCount > 0 || resourceTimingBufferOverflowed,
                 measuredResourceCount,

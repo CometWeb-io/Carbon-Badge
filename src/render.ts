@@ -1,12 +1,13 @@
 import type { BadgeData, BadgeTheme } from './types';
-import { SCORE_MODEL_ID_COMETWEB_BANDS_V1 } from './types';
+import { SCORE_MODEL_ID_COMETWEB_BANDS_V1, FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1 } from './types';
 import { clamp } from './utils';
+import { hasInvalidFreshness, normalizeBadgeData, timestampMs } from './normalize';
+import { co2ToScore } from './estimator';
+import { translate, type BadgeLanguage } from './locale';
+import { trustedEvidenceUrl, canonicalizeBadgeUrl } from './url';
+export { trustedEvidenceUrl } from './url';
 
 const DEFAULT_EVIDENCE_URL = 'https://cometweb.io/carbon-badge';
-const ALLOWED_EVIDENCE_ORIGINS = new Set([
-    'https://cometweb.io',
-    'https://app.cometweb.io',
-]);
 const SCORE_CLASS_MAP: Record<string, string> = {
     'A+': 'grade-aplus',
     A: 'grade-a',
@@ -16,25 +17,25 @@ const SCORE_CLASS_MAP: Record<string, string> = {
     F: 'grade-f',
 };
 
+function measuredSubject(raw: string): string {
+    try { const url = new URL(raw); return url.host + (url.pathname === '/' ? '' : url.pathname); } catch { return 'This page'; }
+}
+
 export interface BadgeViewModel {
     ariaLabel: string;
-    verified: boolean;
+    published: boolean;
 }
 
-/** Cache / local estimate must never mint a Verified claim. */
+/** Cache / local estimate cannot establish published provenance. */
 export interface RenderTrust {
-    allowVerified: boolean;
+    allowPublished: boolean;
 }
 
-function formatMeasuredDate(value: string | null): string | null {
+function formatMeasuredDate(value: string | null, locale: BadgeLanguage): string | null {
     if (!value) return null;
     const date = new Date(value);
     if (!Number.isFinite(date.getTime())) return null;
     try {
-        const locale =
-            typeof navigator !== 'undefined' && navigator.language
-                ? navigator.language
-                : 'en';
         return new Intl.DateTimeFormat(locale, {
             year: 'numeric',
             month: 'short',
@@ -48,44 +49,18 @@ function formatMeasuredDate(value: string | null): string | null {
 
 function hasFreshSnapshotProvenance(data: BadgeData): boolean {
     if (!data.measuredAt || !data.validUntil) return false;
-    const measuredAt = Date.parse(data.measuredAt);
-    const validUntil = Date.parse(data.validUntil);
+    const measuredAt = timestampMs(data.measuredAt);
+    const validUntil = timestampMs(data.validUntil);
     const now = Date.now();
     return (
         Number.isFinite(measuredAt) &&
         Number.isFinite(validUntil) &&
         measuredAt <= now &&
-        validUntil > now
+        validUntil > now &&
+        !hasInvalidFreshness(data.measuredAt, data.validUntil, now, true)
     );
 }
 
-/**
- * Evidence URL must be HTTPS, credential-free, on an allowlisted origin,
- * and (when a publicId is known) bound to `/carbon-badge/{publicId}` with
- * no query or fragment.
- */
-export function trustedEvidenceUrl(
-    raw: string | null | undefined,
-    publicId: string | null = null,
-): URL | null {
-    if (!raw) return null;
-    try {
-        const url = new URL(raw);
-        if (url.protocol !== 'https:') return null;
-        if (url.username || url.password) return null;
-        if (!ALLOWED_EVIDENCE_ORIGINS.has(url.origin)) return null;
-
-        if (publicId) {
-            const expectedPath = `/carbon-badge/${encodeURIComponent(publicId.toLowerCase())}`;
-            if (url.pathname.toLowerCase() !== expectedPath) return null;
-            if (url.search || url.hash) return null;
-        }
-
-        return url;
-    } catch {
-        return null;
-    }
-}
 
 export function evidenceHref(
     raw: string | null | undefined,
@@ -94,10 +69,7 @@ export function evidenceHref(
     if (publicId) {
         const bound = trustedEvidenceUrl(raw, publicId);
         if (bound) return bound.href;
-        return new URL(
-            `/carbon-badge/${encodeURIComponent(publicId.toLowerCase())}`,
-            'https://cometweb.io',
-        ).href;
+        return DEFAULT_EVIDENCE_URL;
     }
     return trustedEvidenceUrl(raw)?.href || DEFAULT_EVIDENCE_URL;
 }
@@ -131,13 +103,12 @@ function clearRoot(
     if (keepStyle) root.appendChild(keepStyle);
 }
 
-function isVerifiedSnapshot(
+function isPublishedSnapshot(
     data: BadgeData,
     trust: RenderTrust,
 ): boolean {
-    if (!trust.allowVerified) return false;
+    if (!trust.allowPublished) return false;
     return (
-        data.verified === true &&
         data.status === 'ready' &&
         data.source === 'published_snapshot' &&
         data.publicId !== null &&
@@ -149,60 +120,83 @@ function isVerifiedSnapshot(
     );
 }
 
-function subtitleFor(data: BadgeData): { text: string; highlight?: string } {
+function subtitleFor(data: BadgeData, published: boolean, language: BadgeLanguage): { text: string; highlight?: string } {
     if (data.status === 'stale') {
         return { text: 'Stale measurement — refresh required' };
     }
     if (data.status === 'partial') {
         return { text: 'Partial measurement — grade withheld' };
     }
-    if (data.source === 'published_snapshot') {
-        const measuredDate = formatMeasuredDate(data.measuredAt);
+    if (published) {
+        const measuredDate = formatMeasuredDate(data.measuredAt, language);
         return {
-            text: measuredDate
-                ? `Measured ${measuredDate}`
-                : 'Published snapshot',
+            text: (measuredDate ? `${translate('Measured', language)} ${measuredDate}` : translate('Published snapshot', language)) +
+                (typeof location !== 'undefined' && data.url !== canonicalizeBadgeUrl(location.href)
+                    ? translate('; result for another page', language) : ''),
         };
     }
     if (data.cleanerThan !== null && Number.isFinite(data.cleanerThan)) {
         return {
             text: 'Cleaner than ',
-            highlight: `${clamp(data.cleanerThan, 0, 100)}%`,
+            highlight: `${new Intl.NumberFormat(language).format(clamp(data.cleanerThan, 0, 100))}%`,
         };
     }
-    if (data.source === 'estimate') {
+    if (data.source === 'estimate' && data.formulaId === FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1) {
         return {
             text: data.estimatePartial
                 ? 'Local estimate (partial)'
-                : 'Local SWDM v4 estimate',
+                : 'First-load SWDM v4 estimate',
         };
     }
     return { text: 'Estimated page-load footprint' };
 }
 
+export function measurementReason(data: BadgeData | null): string {
+    if (data?.reasonCode === 'document-url-changed') return 'Document URL changed; first-load grade withheld';
+    if (data?.reasonCode === 'cache-outside-first-load') return 'Cached load; first-load grade withheld';
+    if (data?.status === 'revoked') return 'Measurement revoked';
+    if (data?.status === 'stale') return 'Stale measurement — refresh required';
+    return data?.status === 'partial' ? 'Partial measurement — grade withheld' : 'No usable measurement';
+}
+
+/** Extra digits near a threshold keep the displayed value inside its letter band. */
+function formatGrams(grams: number, language: BadgeLanguage): string {
+    const format = (value: number, digits: number) => new Intl.NumberFormat(language, {
+        minimumFractionDigits: digits, maximumFractionDigits: digits, useGrouping: false,
+    }).format(value);
+    if (grams < 0.01) return '<' + format(0.01, 2);
+    let digits = 2, display = format(grams, digits);
+    while (digits < 6 && co2ToScore(Number(display.replace(',', '.'))) !== co2ToScore(grams)) display = format(grams, ++digits);
+    return co2ToScore(Number(display.replace(',', '.'))) === co2ToScore(grams) ? display : '<' + format(grams, 2);
+}
+
 export function badgeViewModel(
     data: BadgeData,
-    trust: RenderTrust = { allowVerified: false },
+    trust: RenderTrust = { allowPublished: false },
+    language: BadgeLanguage = 'en',
 ): BadgeViewModel {
     const co2Grams = data.co2Grams as number;
     const score = data.score as NonNullable<BadgeData['score']>;
-    const ariaCo2 = co2Grams < 0.01 ? 'less than 0.01' : co2Grams.toFixed(2);
+    const display = formatGrams(co2Grams, language);
+    const ariaCo2 = display.startsWith('<') ? `${translate('less than', language)} ${display.slice(1)}` : display;
     return {
-        verified: isVerifiedSnapshot(data, trust),
-        ariaLabel: `Carbon footprint: ${ariaCo2}g CO₂e per visit, CometWeb Score ${score}`,
+        published: isPublishedSnapshot(data, trust),
+        ariaLabel: `${measuredSubject(data.url)}: ${translate('estimated', language)} ${ariaCo2}g CO₂e ${translate(data.measurementScope === 'document-first-load' ? 'per first document load' : 'per page load', language)}, ${translate('CometWeb Score', language)} ${score}`,
     };
 }
 
 export function mountLoading(
     root: ShadowRoot | Element,
     label = 'Calculating carbon footprint…',
-    options: { keepStyles?: boolean } = {},
+    options: { keepStyles?: boolean; language?: BadgeLanguage } = {},
 ): void {
+    const language = options.language ?? 'en';
     clearRoot(root, options);
     const status = element('div', {
         role: 'status',
         'aria-live': 'polite',
-        'aria-label': label,
+        'aria-label': translate(label, language),
+        lang: language,
     });
     const badge = element('div', { class: 'cw-badge loading' });
     badge.append(
@@ -210,9 +204,9 @@ export function mountLoading(
     );
     const content = element('div', { class: 'cw-content' });
     content.append(
-        element('div', { class: 'cw-title' }, 'Measuring…'),
-        element('div', { class: 'cw-subtitle' }, 'Estimating page-load footprint'),
-        element('div', { class: 'cw-footer', 'aria-hidden': 'true' }, 'Powered by CometWeb'),
+        element('div', { class: 'cw-title' }, translate(label === 'Calculating carbon footprint…' ? 'Measuring…' : label, language)),
+        element('div', { class: 'cw-subtitle' }, translate('Estimating page-load footprint', language)),
+        element('div', { class: 'cw-footer', 'aria-hidden': 'true' }, translate('Powered by CometWeb', language)),
     );
     badge.append(content);
     status.append(badge);
@@ -222,23 +216,36 @@ export function mountLoading(
 export function mountUnknown(
     root: ShadowRoot | Element,
     reason: string,
-    options: { keepStyles?: boolean } = {},
+    options: { keepStyles?: boolean; data?: BadgeData; language?: BadgeLanguage } = {},
 ): void {
+    const language = options.language ?? 'en';
     clearRoot(root, options);
     const status = element('div', {
         role: 'status',
         'aria-live': 'polite',
-        'aria-label': 'Carbon footprint not available',
+        'aria-label': `${translate(measuredSubject(options.data?.url || ''), language)}: ${translate('carbon footprint not available', language)}`,
+        lang: language,
     });
     const badge = element('div', { class: 'cw-badge error' });
     badge.append(
         element('div', { class: 'cw-grade grade-unknown', 'aria-hidden': 'true' }, 'N/D'),
     );
     const content = element('div', { class: 'cw-content' });
+    if (options.data?.url) content.append(element('div', { class: 'cw-host' }, measuredSubject(options.data.url)));
     content.append(
-        element('div', { class: 'cw-title' }, 'Not available'),
-        element('div', { class: 'cw-subtitle' }, reason),
+        element('div', { class: 'cw-title' }, translate('Not available', language)),
+        element('div', { class: 'cw-subtitle' }, translate(reason, language)),
     );
+    const measured = options.data?.measuredResourceCount;
+    const unknown = options.data?.unknownResourceCount;
+    if (measured !== undefined && unknown !== undefined) {
+        const visibility = unknown === 0 && options.data?.estimatePartial
+            ? `${measured} ${translate('resource sizes visible', language)}; ${translate('timing history incomplete', language)}`
+            : `${measured} ${translate('of', language)} ${measured + unknown} ${translate('resource sizes visible', language)}`;
+        content.append(element('div', { class: 'cw-subtitle' }, visibility));
+    }
+    if (typeof options.data?.networkTransferBytes === 'number') content.append(element('div', { class: 'cw-subtitle' },
+        `${translate('Observed transfer', language)} ≥ ${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(options.data.networkTransferBytes / 1000)} KB`));
     const actions = element('div', { class: 'cw-error-actions' });
     actions.append(
         element(
@@ -246,14 +253,14 @@ export function mountUnknown(
             {
                 type: 'button',
                 class: 'cw-retry-btn',
-                'aria-label': 'Retry carbon measurement',
+                'aria-label': translate('Retry carbon measurement', language),
             },
-            'Retry',
+            translate('Retry', language),
         ),
     );
     content.append(
         actions,
-        element('div', { class: 'cw-footer', 'aria-hidden': 'true' }, 'Powered by CometWeb'),
+        element('a', { class: 'cw-footer', href: DEFAULT_EVIDENCE_URL, target: '_blank', rel: 'noopener noreferrer', 'aria-label': `Carbon Badge — CometWeb (${translate('opens in new tab', language)})` }, translate('Powered by CometWeb', language)),
     );
     badge.append(content);
     status.append(badge);
@@ -264,19 +271,28 @@ export function mountBadge(
     root: ShadowRoot | Element,
     data: BadgeData,
     theme: BadgeTheme,
-    options: { keepStyles?: boolean; trust?: RenderTrust } = {},
+    options: { keepStyles?: boolean; trust?: RenderTrust; language?: BadgeLanguage } = {},
 ): BadgeViewModel {
-    const trust = options.trust ?? { allowVerified: false };
-    const model = badgeViewModel(data, trust);
+    const language = options.language ?? 'en';
+    const normalized = normalizeBadgeData(data);
+    if (!normalized || normalized.status !== 'ready' || normalized.co2Grams === null) {
+        mountUnknown(root, measurementReason(normalized), { ...options, data: normalized ?? undefined });
+        return { published: false, ariaLabel: translate('carbon footprint not available', language) };
+    }
+    data = normalized;
+    const trust = options.trust ?? { allowPublished: false };
+    const model = badgeViewModel(data, trust, language);
     const co2Grams = data.co2Grams as number;
     const score = data.score as NonNullable<BadgeData['score']>;
     const scoreClass = SCORE_CLASS_MAP[score] || 'grade-unknown';
-    const co2Display = co2Grams < 0.01 ? '<0.01' : co2Grams.toFixed(2);
-    const footerLabel = model.verified
-        ? 'Verified by CometWeb'
+    const co2Display = formatGrams(co2Grams, language);
+    const footerLabel = model.published
+        ? 'Published by CometWeb'
         : 'Powered by CometWeb';
-    const href = evidenceHref(data.evidenceUrl, data.publicId);
-    const subtitle = subtitleFor(data);
+    const href = model.published
+        ? evidenceHref(data.evidenceUrl, data.publicId)
+        : DEFAULT_EVIDENCE_URL;
+    const subtitle = subtitleFor(data, model.published, language);
 
     clearRoot(root, options);
 
@@ -284,13 +300,14 @@ export function mountBadge(
         role: 'status',
         'aria-live': 'polite',
         'aria-label': model.ariaLabel,
+        lang: language,
     });
     const link = element('a', {
         class: `cw-badge ${theme}`,
         href,
         target: '_blank',
         rel: 'noopener noreferrer',
-        'aria-label': `${model.ariaLabel} — CometWeb (opens in new tab)`,
+        'aria-label': `${model.ariaLabel} — CometWeb (${translate('opens in new tab', language)})`,
     });
     link.append(
         element('div', { class: `cw-grade ${scoreClass}`, 'aria-hidden': 'true' }, score),
@@ -298,25 +315,26 @@ export function mountBadge(
 
     const content = element('div', { class: 'cw-content' });
     const title = element('div', { class: 'cw-title' }, `${co2Display}g CO₂e `);
-    title.append(element('small', {}, '/ visit'));
+    title.append(element('small', {}, `/ ${translate(data.measurementScope === 'document-first-load' ? 'first load' : 'load', language)}`));
 
-    const subtitleEl = element('div', { class: 'cw-subtitle' }, subtitle.text);
+    const subtitleEl = element('div', { class: 'cw-subtitle' }, translate(subtitle.text, language));
     if (subtitle.highlight) {
         subtitleEl.append(
             element('span', { class: 'cw-highlight' }, subtitle.highlight),
-            document.createTextNode(' of modelled cohort'),
+            document.createTextNode(translate(' of modelled cohort', language)),
         );
     }
 
     content.append(
+        element('div', { class: 'cw-host' }, measuredSubject(data.url)),
         title,
         subtitleEl,
         element(
             'div',
             { class: 'cw-score-model', 'aria-hidden': 'true' },
-            `CometWeb Score ${score}`,
+            `${translate('CometWeb Score', language)} ${score}`,
         ),
-        element('div', { class: 'cw-footer', 'aria-hidden': 'true' }, footerLabel),
+        element('div', { class: 'cw-footer', 'aria-hidden': 'true' }, translate(footerLabel, language)),
     );
     link.append(content);
     status.append(link);
@@ -344,7 +362,7 @@ export function buildUnknownMarkup(reason: string): string {
 export function buildBadgeMarkup(
     data: BadgeData,
     theme: BadgeTheme,
-    trust: RenderTrust = { allowVerified: true },
+    trust: RenderTrust = { allowPublished: true },
 ): BadgeViewModel & { markup: string } {
     const host = document.createElement('div');
     const model = mountBadge(host, data, theme, { trust });

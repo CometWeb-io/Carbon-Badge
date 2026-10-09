@@ -12,44 +12,25 @@ import type {
     BadgeTheme,
     BadgeMode,
     ScoreLetter,
-    APIResponse,
     MeasurementSource,
     RetrievalSource,
 } from './types';
-    import {
-    getFreshCached,
-    setCache,
-    clearExpiredOnce,
-    buildCacheKey,
-} from './cache';
 import { estimateCO2Detailed, initializeResourceTiming } from './estimator';
 import { getStyleSheet, getStyles } from './styles';
 import {
     canonicalizeBadgeUrl,
-    parseApiResponse,
     normalizeBadgeData,
     cloneBadgeData,
-    sanitizeAllowedQueryKeys,
 } from './normalize';
-import {
-    API_TIMEOUT_MS,
-    DEFAULT_API_URL,
-    MAX_RETRIES,
-    buildCarbonBadgeEndpoint,
-    buildCarbonBadgeSnapshotEndpoint,
-    calculateRetryDelay,
-    fetchSingleFlight,
-    isRetryableHttpStatus,
-    parseRetryAfter,
-    validateSnapshotId,
-    validateApiUrl,
-} from './api-client';
+import { validateSnapshotId } from './url';
 import {
     mountBadge,
     mountLoading,
     mountUnknown,
+    measurementReason,
 } from './render';
 import { waitForPageQuiescence } from './page-quiescence';
+import type { BadgeLanguage } from './locale';
 
 const DEFAULT_CACHE_TTL = 720; // 12 hours in minutes
 const MAX_CACHE_TTL = 1_440; // 24 hours
@@ -77,15 +58,18 @@ const HTMLElementBase: typeof HTMLElement =
 export class CometWebCarbonBadge extends HTMLElementBase {
     private shadow: ShadowRoot;
     private data: BadgeData | null = null;
-    private retryCount = 0;
-    private effectiveVerified = false;
+    private effectivePublished = false;
     private measurementSource: MeasurementSource = 'api';
     private retrievalSource: RetrievalSource = 'network';
     private _loadId = 0;
     private _abort: AbortController | null = null;
     private _scheduleTimer: ReturnType<typeof setTimeout> | null = null;
-    private _retryTimer: ReturnType<typeof setTimeout> | null = null;
     private _forceNext = false;
+    private _routeTimer: ReturnType<typeof setInterval> | null = null;
+    private _expiryTimer: ReturnType<typeof setTimeout> | null = null;
+    private _visibilityObserver: IntersectionObserver | null = null;
+    private _visible = false;
+    private lastReason = 'Measurement unavailable';
 
     get badgeData(): BadgeData | null {
         return this.data ? cloneBadgeData(this.data) : null;
@@ -102,16 +86,17 @@ export class CometWebCarbonBadge extends HTMLElementBase {
     get pageWeightKb(): number | null {
         return this.data?.pageWeightKb ?? null;
     }
+    get pageWeightKiB(): number | null { return this.data?.pageWeightKiB ?? null; }
+    get pageWeightKB(): number | null { return this.data?.pageWeightKB ?? null; }
     get measurementStatus(): BadgeData['status'] | null {
         return this.data?.status ?? null;
     }
 
     reload(options?: { force?: boolean }): void {
-        this.retryCount = 0;
         this.data = null;
         this._forceNext = options?.force === true;
         this._loadId++;
-        this.clearRetryTimer();
+        if (this._expiryTimer) clearTimeout(this._expiryTimer);
         this.abortInFlight();
         this.renderLoading();
         this.scheduleLoad();
@@ -125,7 +110,9 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             'theme',
             'cache-ttl',
             'green-host',
-            'allow-query',
+            'lang',
+            'nonce',
+            'loading',
         ];
     }
 
@@ -148,29 +135,20 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         return value || null;
     }
 
-    private get allowedQueryKeys(): string[] {
-        const raw = this.getAttribute('allow-query')?.trim();
-        if (!raw) return [];
-        return sanitizeAllowedQueryKeys(
-            raw.split(',').map((key) => key.trim()),
-        );
-    }
-
     private get canonicalTargetUrl(): string | null {
-        return canonicalizeBadgeUrl(this.rawTargetUrl, this.allowedQueryKeys);
+        return canonicalizeBadgeUrl(this.rawTargetUrl);
     }
 
     private get mode(): BadgeMode | null {
         const raw = this.getAttribute('mode')?.trim();
         if (!raw) {
-            return this.snapshotId ? 'snapshot' : 'api';
+            return this.hasAttribute('snapshot-id') ? 'snapshot' : 'estimate';
         }
         if (raw !== 'estimate' && raw !== 'api' && raw !== 'snapshot') {
             return null;
         }
-        // Fail closed: snapshot-id with api/estimate is ambiguous and must
-        // not silently ignore the published id in favour of a local grade.
-        if (this.snapshotId && raw !== 'snapshot') {
+        // A published ID must never be silently ignored for a live or local grade.
+        if (this.hasAttribute('snapshot-id') && raw !== 'snapshot') {
             return null;
         }
         return raw;
@@ -179,6 +157,10 @@ export class CometWebCarbonBadge extends HTMLElementBase {
     private get theme(): BadgeTheme {
         const t = this.getAttribute('theme') as BadgeTheme;
         return ALLOWED_THEMES.has(t) ? t : 'dark';
+    }
+    private get language(): BadgeLanguage {
+        const language = this.closest('[lang]')?.getAttribute('lang') || document.documentElement.lang || navigator.language;
+        return language.toLowerCase().startsWith('pl') ? 'pl' : 'en';
     }
 
     private get cacheTtl(): number {
@@ -189,40 +171,28 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         return Math.min(value, MAX_CACHE_TTL);
     }
 
-    private get apiUrl(): string {
-        return DEFAULT_API_URL.replace(/\/+$/, '');
-    }
-
     private get greenHost(): boolean {
         return this.getAttribute('green-host') === 'true';
     }
 
-    private cacheKeyFor(canonicalUrl: string, mode: BadgeMode): string {
-        return buildCacheKey({
-            canonicalUrl,
-            snapshotId: this.snapshotId,
-            mode,
-            apiUrl: this.apiUrl,
-            greenHost: this.greenHost,
-        });
-    }
-
     connectedCallback() {
-        if (!this.hasAttribute('tabindex')) {
-            this.setAttribute('tabindex', '-1');
-        }
+        this.data = null;
+        this._visible = false;
         this.renderLoading();
-        clearExpiredOnce();
         this.scheduleLoad();
     }
 
     disconnectedCallback() {
+        if (this._routeTimer) clearInterval(this._routeTimer);
+        if (this._expiryTimer) clearTimeout(this._expiryTimer);
+        this._routeTimer = this._expiryTimer = null;
+        this._visibilityObserver?.disconnect();
+        this._visibilityObserver = null;
         this.abortInFlight();
         if (this._scheduleTimer) {
             clearTimeout(this._scheduleTimer);
             this._scheduleTimer = null;
         }
-        this.clearRetryTimer();
         this._loadId++;
     }
 
@@ -234,6 +204,13 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         if (!this.isConnected || oldValue === newValue) return;
         if (name === 'theme') {
             this.updateStyles();
+            return;
+        }
+        if (name === 'nonce') { this.updateStyles(); return; }
+        if (name === 'lang') {
+            if (!this.data) this.renderLoading();
+            else if (this.data.status === 'ready') this.renderBadge();
+            else this.renderUnknown(this.lastReason, this.data);
             return;
         }
         this.reload({ force: name === 'cache-ttl' });
@@ -254,35 +231,23 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         }
     }
 
-    private clearRetryTimer(): void {
-        if (this._retryTimer) {
-            clearTimeout(this._retryTimer);
-            this._retryTimer = null;
-        }
-    }
-
-    private scheduleRetry(delay: number, callback: () => void): void {
-        this.clearRetryTimer();
-        this._retryTimer = setTimeout(() => {
-            this._retryTimer = null;
-            callback();
-        }, Math.min(Math.max(delay, 0), 30_000));
-    }
-
     private async loadData() {
         if (!this.isConnected) return;
 
         const loadId = ++this._loadId;
-        this.retryCount = 0;
         const force = this._forceNext;
         this._forceNext = false;
-        this.effectiveVerified = false;
+        this.effectivePublished = false;
 
         const mode = this.mode;
+        this._visibilityObserver?.disconnect();
+        this._visibilityObserver = null;
+        if (this._routeTimer) clearInterval(this._routeTimer);
+        this._routeTimer = null;
         if (!mode) {
             const rawMode = this.getAttribute('mode')?.trim();
             if (
-                this.snapshotId &&
+                this.hasAttribute('snapshot-id') &&
                 (rawMode === 'api' || rawMode === 'estimate')
             ) {
                 console.warn(
@@ -300,6 +265,26 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             this.renderUnknown('Missing snapshot ID');
             return;
         }
+        if (mode !== 'estimate' && !this._visible && this.getAttribute('loading') !== 'eager' && typeof IntersectionObserver !== 'undefined') {
+            this.renderLoading('Waiting until visible…');
+            this._visibilityObserver = new IntersectionObserver(entries => {
+                if (loadId !== this._loadId || !this.isConnected || !entries.some(entry => entry.isIntersecting)) return;
+                this._visible = true;
+                this._visibilityObserver?.disconnect();
+                this._visibilityObserver = null;
+                this.scheduleLoad();
+            }, { rootMargin: '200px' });
+            this._visibilityObserver.observe(this);
+            return;
+        }
+        if (mode === 'estimate') {
+            let observedUrl = currentPageUrl();
+            // shortcut: 1 s polling can be delayed by background throttling; use reload() for immediate updates.
+            this._routeTimer = setInterval(() => {
+                const nextUrl = currentPageUrl();
+                if (nextUrl !== observedUrl) { observedUrl = nextUrl; this.reload(); }
+            }, 1_000);
+        }
 
         const canonical = this.canonicalTargetUrl;
         if (mode !== 'snapshot' && !canonical) {
@@ -316,23 +301,6 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             }
         }
 
-        const cacheKey = this.cacheKeyFor(canonical || '', mode);
-        const cacheEnabled = mode !== 'snapshot';
-
-        if (cacheEnabled && !force) {
-            const cached = normalizeBadgeData(
-                getFreshCached(cacheKey, this.cacheTtl),
-            );
-            if (cached && cached.co2Grams !== null) {
-                if (loadId !== this._loadId || !this.isConnected) return;
-                this.data = cached;
-                this.measurementSource = cached.source || 'api';
-                this.retrievalSource = 'cache';
-                this.renderBadge();
-                return;
-            }
-        }
-
         if (mode === 'estimate') {
             if (!canonical) {
                 this.renderUnknown('Invalid or missing URL');
@@ -342,7 +310,42 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             return;
         }
 
-        await this.fetchFromAPI(canonical || '', cacheKey, loadId, mode);
+        this.abortInFlight();
+        const controller = new AbortController();
+        this._abort = controller;
+        try {
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            let abortModule: () => void = () => {};
+            const interrupted = new Promise<never>((_resolve, reject) => {
+                abortModule = () => reject(new Error('Module load aborted'));
+                controller.signal.addEventListener('abort', abortModule, { once: true });
+                timer = setTimeout(() => reject(new Error('Module load timed out')), 8_000);
+                if (controller.signal.aborted) abortModule();
+            });
+            let runtime;
+            // shortcut: native import cannot abort its asset fetch; cancellation stops API work and rendering.
+            try { runtime = await Promise.race([import('./remote'), interrupted]); }
+            finally { clearTimeout(timer); controller.signal.removeEventListener('abort', abortModule); }
+            const { loadRemoteMeasurement } = runtime;
+            if (controller.signal.aborted || loadId !== this._loadId || !this.isConnected) return;
+            const result = await loadRemoteMeasurement({
+                canonicalUrl: canonical || '', snapshotId: this.snapshotId, mode,
+                cacheTtl: this.cacheTtl, greenHost: this.greenHost, force,
+                badgeOrigin: typeof location === 'undefined' ? '' : location.origin,
+            }, controller.signal, label => {
+                if (loadId === this._loadId && this.isConnected) this.renderLoading(label);
+            });
+            if (controller.signal.aborted || loadId !== this._loadId || !this.isConnected) return;
+            if ('reason' in result) { this.renderUnknown(result.reason); return; }
+            this.data = result.data;
+            this.measurementSource = result.data.source || 'api';
+            this.retrievalSource = result.retrievalSource;
+            this.renderBadge();
+        } catch {
+            if (!controller.signal.aborted && loadId === this._loadId && this.isConnected) this.renderUnknown('Unable to load measurement');
+        } finally {
+            if (this._abort === controller) this._abort = null;
+        }
     }
 
     private async runEstimate(canonical: string, loadId = this._loadId) {
@@ -360,6 +363,8 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         this.abortInFlight();
         const controller = new AbortController();
         this._abort = controller;
+        this.measurementSource = 'estimate';
+        this.retrievalSource = 'local';
 
         try {
             await waitForPageQuiescence(controller.signal);
@@ -371,161 +376,21 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             this.measurementSource = 'estimate';
             this.retrievalSource = 'local';
             if (data.co2Grams === null) {
-                this.renderUnknown('Measurement unavailable');
+                this.renderUnknown(
+                    measurementReason(data),
+                    data,
+                );
             } else {
-                setCache(this.cacheKeyFor(canonical, 'estimate'), data, this.cacheTtl);
                 this.renderBadge();
             }
         } catch (error) {
             if (loadId !== this._loadId || !this.isConnected) return;
             const isAbort =
                 error instanceof DOMException && error.name === 'AbortError';
-            if (!isAbort) this.renderError();
-        } finally {
-            if (this._abort === controller) this._abort = null;
-        }
-    }
-
-    private async fetchFromAPI(
-        canonical: string,
-        cacheKey: string,
-        loadId = this._loadId,
-        mode: BadgeMode = 'api',
-    ) {
-        this.abortInFlight();
-        const controller = new AbortController();
-        this._abort = controller;
-        const cacheEnabled = mode !== 'snapshot';
-
-        try {
-            const apiUrl = validateApiUrl(this.apiUrl);
-            let badgeOrigin = '';
-            try {
-                badgeOrigin = window.location.origin;
-            } catch {
-                /* SSR */
+            if (!isAbort) {
+                const { data } = estimateCO2Detailed(this.greenHost);
+                this.renderUnknown('Page did not become quiet; grade withheld', { ...data, co2Grams: null, score: null, cleanerThan: null, status: 'partial', reasonCode: 'quiescence-timeout', transferUpperBoundBytes: null, estimatePartial: true });
             }
-            const endpoint =
-                mode === 'snapshot'
-                    ? buildCarbonBadgeSnapshotEndpoint(
-                          apiUrl,
-                          this.snapshotId || '',
-                          badgeOrigin,
-                      )
-                    : buildCarbonBadgeEndpoint(apiUrl, canonical, badgeOrigin);
-
-            const flightKey = endpoint.toString();
-            const response = await fetchSingleFlight(
-                flightKey,
-                {
-                    headers: { Accept: 'application/json' },
-                    cache: mode === 'snapshot' ? 'no-cache' : 'default',
-                },
-                API_TIMEOUT_MS,
-            );
-
-            // Instance disconnected / superseded — shared flight may still finish.
-            if (controller.signal.aborted) return;
-            if (loadId !== this._loadId || !this.isConnected) return;
-
-            if (!response.ok) {
-                if (isRetryableHttpStatus(response.status)) {
-                    const retryAfter = parseRetryAfter(response.retryAfter);
-                    const delay = calculateRetryDelay(
-                        this.retryCount,
-                        retryAfter,
-                    );
-
-                    if (this.retryCount < MAX_RETRIES) {
-                        this.retryCount++;
-                        this.renderLoading(
-                            response.status === 429
-                                ? 'Retrying after rate limit…'
-                                : 'Retrying…',
-                        );
-                        this.scheduleRetry(delay, () => {
-                            if (loadId !== this._loadId) return;
-                            void this.fetchFromAPI(
-                                canonical,
-                                cacheKey,
-                                loadId,
-                                mode,
-                            );
-                        });
-                        return;
-                    }
-
-                    if (response.status === 429) {
-                        console.warn(LOG_PREFIX, 'API rate limited; showing N/D.');
-                        this.renderUnknown('Rate limited — try again later');
-                        return;
-                    }
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                this.renderUnknown(
-                    response.status === 404 && mode === 'snapshot'
-                        ? 'Published snapshot not found'
-                        : 'Measurement unavailable',
-                );
-                return;
-            }
-
-            let apiData: APIResponse;
-            try {
-                apiData = JSON.parse(response.bodyText) as APIResponse;
-            } catch {
-                this.renderUnknown('Malformed API response');
-                return;
-            }
-            if (loadId !== this._loadId || !this.isConnected) return;
-
-            const parsed = parseApiResponse(apiData, {
-                requestedUrl: canonical,
-                requestedSnapshotId:
-                    mode === 'snapshot' ? this.snapshotId : null,
-                allowedQueryKeys: this.allowedQueryKeys,
-            });
-            if (!parsed) {
-                this.renderUnknown('No usable measurement');
-                return;
-            }
-
-            this.data = parsed;
-            this.measurementSource = parsed.source || 'api';
-            this.retrievalSource = 'network';
-            if (cacheEnabled) setCache(cacheKey, parsed, this.cacheTtl);
-            this.retryCount = 0;
-            this.renderBadge();
-        } catch (error) {
-            if (loadId !== this._loadId || !this.isConnected) return;
-            const isAbort =
-                error instanceof DOMException && error.name === 'AbortError';
-            if (isAbort) {
-                console.warn(LOG_PREFIX, 'API request timed out.');
-            }
-
-            if (this.retryCount < 1 && !isAbort) {
-                this.retryCount++;
-                this.renderLoading('Retrying…');
-                this.scheduleRetry(
-                    calculateRetryDelay(this.retryCount - 1),
-                    () => {
-                        if (loadId !== this._loadId) return;
-                        void this.fetchFromAPI(
-                            canonical,
-                            cacheKey,
-                            loadId,
-                            mode,
-                        );
-                    },
-                );
-                return;
-            }
-
-            this.renderUnknown(
-                isAbort ? 'Request timed out' : 'Unable to load measurement',
-            );
         } finally {
             if (this._abort === controller) this._abort = null;
         }
@@ -552,12 +417,23 @@ export class CometWebCarbonBadge extends HTMLElementBase {
                     formulaId: d.formulaId,
                     scoreModelId: d.scoreModelId,
                     measuredAt: d.measuredAt,
-                    verified: this.effectiveVerified,
-                    backendVerified: d.verified,
+                    published: this.effectivePublished,
+                    originMatched: this.retrievalSource === 'network' ? d.originMatched : null,
                     measuredResourceCount: d.measuredResourceCount,
+                    pageWeightKB: d.pageWeightKB,
+                    pageWeightKiB: d.pageWeightKiB,
+                    factorSetId: d.factorSetId,
+                    measurementWindowStartMs: d.measurementWindowStartMs,
+                    measurementWindowEndMs: d.measurementWindowEndMs,
                     unknownResourceCount: d.unknownResourceCount,
                     observableResourceRatio: d.observableResourceRatio,
                     coverageRatio: d.coverageRatio,
+                    reasonCode: d.reasonCode,
+                    measurementScope: d.measurementScope,
+                    networkTransferBytes: d.networkTransferBytes,
+                    encodedBodyBytes: d.encodedBodyBytes,
+                    cachedBodyBytes: d.cachedBodyBytes,
+                    transferUpperBoundBytes: d.transferUpperBoundBytes,
                     mode: this.mode,
                     publicId: d.publicId,
                 },
@@ -572,11 +448,11 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             'replaceSync' in CSSStyleSheet.prototype;
 
         if (supportsSheets) {
-            this.shadow.adoptedStyleSheets = [getStyleSheet(this.theme)];
-            this.shadow
-                .querySelector('style[data-cw-theme]')
-                ?.remove();
-            return;
+            try {
+                this.shadow.adoptedStyleSheets = [getStyleSheet(this.theme)];
+                this.shadow.querySelector('style[data-cw-theme]')?.remove();
+                return;
+            } catch { /* Fall back to the host-provided style nonce. */ }
         }
 
         let style = this.shadow.querySelector<HTMLStyleElement>(
@@ -587,33 +463,13 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             style.dataset.cwTheme = '';
             this.shadow.prepend(style);
         }
+        style.nonce = this.nonce;
         style.textContent = getStyles(this.theme);
-    }
-
-    private prepareShadow(keepStyles: boolean): { keepStyles: boolean } {
-        const supportsSheets =
-            'adoptedStyleSheets' in this.shadow &&
-            typeof CSSStyleSheet !== 'undefined' &&
-            'replaceSync' in CSSStyleSheet.prototype;
-        this.updateStyles();
-        if (supportsSheets) {
-            return { keepStyles: false };
-        }
-        let style = this.shadow.querySelector<HTMLStyleElement>(
-            'style[data-cw-theme]',
-        );
-        if (!style) {
-            style = document.createElement('style');
-            style.dataset.cwTheme = '';
-            this.shadow.prepend(style);
-        }
-        style.textContent = getStyles(this.theme);
-        return { keepStyles };
     }
 
     private renderLoading(label = 'Calculating carbon footprint\u2026') {
-        const opts = this.prepareShadow(true);
-        mountLoading(this.shadow, label, opts);
+        this.updateStyles();
+        mountLoading(this.shadow, label, { keepStyles: true, language: this.language });
     }
 
     private renderBadge() {
@@ -626,27 +482,34 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             normalized.status === 'stale'
         ) {
             this.renderUnknown(
-                normalized?.status === 'partial'
-                    ? 'Partial measurement — grade withheld'
-                    : 'No usable measurement',
+                measurementReason(normalized),
+                normalized ?? undefined,
             );
             return;
         }
         this.data = normalized;
-        const opts = this.prepareShadow(true);
+        this.updateStyles();
         const model = mountBadge(this.shadow, normalized, this.theme, {
-            ...opts,
+            keepStyles: true,
+            language: this.language,
             trust: {
-                allowVerified: this.retrievalSource === 'network',
+                allowPublished: this.retrievalSource === 'network',
             },
         });
-        this.effectiveVerified = model.verified;
+        this.effectivePublished = model.published;
+        if (this._expiryTimer) clearTimeout(this._expiryTimer);
+        const expires = normalized.validUntil ? Date.parse(normalized.validUntil) : NaN;
+        if (Number.isFinite(expires)) this._expiryTimer = setTimeout(() => {
+            if (this.isConnected) this.reload({ force: true });
+        }, Math.min(Math.max(expires - Date.now(), 0), 2_147_483_647));
         this.dispatchBadgeEvent();
     }
 
-    private renderUnknown(reason: string) {
-        this.effectiveVerified = false;
-        this.data = {
+    private renderUnknown(reason: string, measurement?: BadgeData) {
+        this.lastReason = reason;
+        if (this._expiryTimer) clearTimeout(this._expiryTimer);
+        this.effectivePublished = false;
+        this.data = measurement ?? {
             url: this.canonicalTargetUrl || '',
             publicId: null,
             co2Grams: null,
@@ -654,7 +517,7 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             cleanerThan: null,
             pageWeightKb: null,
             greenHost: null,
-            verified: false,
+            originMatched: null,
             timestamp: Date.now(),
             status: 'unknown',
             source: null,
@@ -665,25 +528,36 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             validUntil: null,
             evidenceUrl: null,
         };
-        const opts = this.prepareShadow(true);
-        mountUnknown(this.shadow, reason, opts);
+        this.updateStyles();
+        mountUnknown(this.shadow, reason, { keepStyles: true, data: this.data, language: this.language });
         this.dispatchEvent(
             new CustomEvent('cometweb:badge-error', {
                 bubbles: true,
                 composed: true,
                 detail: {
-                    url: this.canonicalTargetUrl || '',
+                    url: this.data.url,
                     mode: this.mode,
                     reason,
-                    status: 'unknown',
+                    reasonCode: this.data.reasonCode,
+                    status: this.data.status,
+                    measurementSource: this.data.source,
+                    retrievalSource: this.data.source ? this.retrievalSource : null,
+                    factorSetId: this.data.factorSetId,
+                    measurementWindowStartMs: this.data.measurementWindowStartMs,
+                    measurementWindowEndMs: this.data.measurementWindowEndMs,
+                    pageWeightKB: this.data.pageWeightKB,
+                    pageWeightKiB: this.data.pageWeightKiB,
+                    measuredResourceCount: this.data.measuredResourceCount,
+                    unknownResourceCount: this.data.unknownResourceCount,
+                    observableResourceRatio: this.data.observableResourceRatio,
+                    networkTransferBytes: this.data.networkTransferBytes,
+                    encodedBodyBytes: this.data.encodedBodyBytes,
+                    cachedBodyBytes: this.data.cachedBodyBytes,
+                    transferUpperBoundBytes: this.data.transferUpperBoundBytes,
                 },
             }),
         );
         this.bindRetry();
-    }
-
-    private renderError() {
-        this.renderUnknown('Unable to calculate');
     }
 
     private bindRetry() {
@@ -691,10 +565,10 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             this.shadow.querySelector<HTMLButtonElement>('.cw-retry-btn');
         if (btn) {
             btn.addEventListener('click', () => {
-                this.retryCount = 0;
                 this.renderLoading();
                 this.reload({ force: true });
-                this.focus();
+                const status = this.shadow.querySelector<HTMLElement>('[role="status"]');
+                if (status) { status.tabIndex = -1; status.focus(); }
             });
         }
     }
@@ -708,9 +582,9 @@ export function registerCarbonBadge(): CustomElementConstructor | null {
     ) {
         return null;
     }
-    initializeResourceTiming();
     const existing = customElements.get('cometweb-carbon-badge');
     if (existing) return existing;
+    initializeResourceTiming();
     customElements.define('cometweb-carbon-badge', CometWebCarbonBadge);
     return CometWebCarbonBadge;
 }

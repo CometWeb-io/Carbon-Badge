@@ -1,5 +1,5 @@
 /**
- * Tests for localStorage caching layer (cache.ts) — schema v5
+ * Tests for localStorage caching layer (cache.ts) — schema v8
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
@@ -23,7 +23,7 @@ const mockData: BadgeData = {
     cleanerThan: 72,
     pageWeightKb: 480,
     greenHost: false,
-    verified: false,
+    originMatched: null,
     timestamp: Date.now(),
     status: 'ready',
     source: 'api',
@@ -70,7 +70,21 @@ beforeEach(() => {
 
 describe('buildCacheKey', () => {
     it('uses the owned cometweb namespace', () => {
-        expect(key.startsWith('cometweb:carbon-badge:v5:')).toBe(true);
+        expect(key.startsWith('cometweb:carbon-badge:v8:')).toBe(true);
+    });
+
+    it('does not reuse a v6 entry with a formerly mislabeled scan source', () => {
+        const oldKey = key.replace(':v8:', ':v7:');
+        localStorage.setItem(oldKey, JSON.stringify({
+            data: { ...mockData, source: 'published_snapshot' },
+            ts: Date.now(),
+            expiresAt: Date.now() + 60_000,
+            schema: 6,
+        }));
+
+        expect(getFreshCached(key)).toBeNull();
+        clearExpired();
+        expect(localStorage.getItem(oldKey)).toBeNull();
     });
 
     it('changes when mode or green-host changes', () => {
@@ -114,9 +128,27 @@ describe('setCache / getCached', () => {
     });
 
     it('strips verified from host-controlled cache entries', () => {
-        setCache(key, { ...mockData, verified: true }, 720);
-        expect(getCached(key)?.verified).toBe(false);
-        expect(getFreshCached(key)?.verified).toBe(false);
+        setCache(key, { ...mockData, originMatched: true }, 720);
+        expect(getCached(key)?.originMatched).toBe(null);
+        expect(getFreshCached(key)?.originMatched).toBe(null);
+    });
+
+    it('does not store or reuse a published snapshot whose consent may be revoked', () => {
+        const published = { ...mockData, source: 'published_snapshot' as const };
+        setCache(key, published, 720);
+        expect(localStorage.getItem(key)).toBeNull();
+
+        localStorage.setItem(key, JSON.stringify({
+            data: published,
+            ts: Date.now(),
+            expiresAt: Date.now() + 60_000,
+            schema: BADGE_CACHE_SCHEMA,
+        }));
+        localStorage.setItem(__CACHE_INDEX_KEY, JSON.stringify([key]));
+        expect(getCached(key)).toBeNull();
+        expect(isCacheValid(key)).toBe(false);
+        expect(getFreshCached(key)).toBeNull();
+        expect(localStorage.getItem(key)).toBeNull();
     });
 
     it('getFreshCached returns null for expired entries and removes them', () => {

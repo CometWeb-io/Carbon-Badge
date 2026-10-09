@@ -1,0 +1,46 @@
+{
+  "oracle": "@tgwf/co2@0.19.0",
+  "integrity": "sha512-3VkpB5H6OGQF2P6nESbThVEOfQrFjBz8wBDTEmhbJ4uEi67TsMt+Oyq7YOweOdUkSOJBPsezjf/5i/ScXgqGDA==",
+  "model": "swd",
+  "version": 4,
+  "green": false,
+  "scope": "perByte, first-load, global grid 494 gCO2e/kWh",
+  "cases": [
+    {
+      "bytes": 1,
+      "grams": 1.4820000000000002e-7
+    },
+    {
+      "bytes": 100,
+      "grams": 0.00001482
+    },
+    {
+      "bytes": 1000,
+      "grams": 0.0001482
+    },
+    {
+      "bytes": 10000,
+      "grams": 0.001482
+    },
+    {
+      "bytes": 674763,
+      "grams": 0.09999987660000001
+    },
+    {
+      "bytes": 1000000,
+      "grams": 0.1482
+    },
+    {
+      "bytes": 1349527,
+      "grams": 0.1999999014
+    },
+    {
+      "bytes": 2699055,
+      "grams": 0.399999951
+    },
+    {
+      "bytes": 1000000000,
+      "grams": 148.2
+    }
+  ]
+}

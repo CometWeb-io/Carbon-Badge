@@ -99,6 +99,15 @@ describe('api-client helpers', () => {
         expect(b.status).toBe(200);
     });
 
+    it('preserves Cache-Control so callers can honor no-store', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', {
+            headers: { 'Cache-Control': 'private, no-store' },
+        })));
+
+        const response = await fetchSingleFlight('no-store-key');
+        expect(response.cacheControl).toBe('private, no-store');
+    });
+
     it('aborts hanging fetches via timeout', async () => {
         vi.stubGlobal(
             'fetch',

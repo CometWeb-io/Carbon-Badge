@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CometWeb-io/Carbon-Badge/blob/main/docs/api-response.schema.json",
+  "title": "Carbon Badge public measurement response",
+  "type": "object",
+  "required": ["url", "status"],
+  "properties": {
+    "url": { "type": "string", "format": "uri", "maxLength": 4096 },
+    "public_id": { "type": "string", "pattern": "^[a-fA-F0-9]{1,64}$" },
+    "status": { "enum": ["ready", "ok", "partial", "stale", "revoked", "unknown"] },
+    "co2_grams": { "type": ["number", "null"], "minimum": 0 },
+    "cleaner_than": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+    "page_weight_kb": { "type": ["number", "null"], "minimum": 0 },
+    "green_host": { "type": ["boolean", "null"] },
+    "measurement_source": { "enum": ["api", "estimate", "cometweb_scan", "published_snapshot", "http_estimate", "badge_http_estimate"] },
+    "measurement_method": { "type": ["string", "null"], "maxLength": 128 },
+    "formula_id": { "type": ["string", "null"], "maxLength": 128 },
+    "factor_set_id": { "type": ["string", "null"], "maxLength": 128 },
+    "score_model_id": { "enum": ["carbon-badge-bands-v1", null] },
+    "measured_at": { "type": ["string", "null"], "format": "date-time" },
+    "valid_until": { "type": ["string", "null"], "format": "date-time" },
+    "evidence_url": { "type": ["string", "null"], "format": "uri", "maxLength": 4096 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "enum": ["ready", "ok"] } } },
+      "then": { "required": ["co2_grams"], "properties": { "co2_grams": { "type": "number" } } }
+    },
+    {
+      "if": { "required": ["measurement_source"], "properties": { "measurement_source": { "const": "published_snapshot" }, "status": { "enum": ["ready", "ok"] } } },
+      "then": {
+        "required": ["public_id", "formula_id", "measurement_method", "score_model_id", "measured_at", "valid_until"],
+        "properties": {
+          "formula_id": { "type": "string", "minLength": 1 },
+          "measurement_method": { "type": "string", "minLength": 1 },
+          "score_model_id": { "const": "carbon-badge-bands-v1" },
+          "measured_at": { "type": "string" }, "valid_until": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

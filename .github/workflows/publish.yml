@@ -36,7 +36,7 @@ jobs:
       - run: npm run test:coverage
       - run: npm run clean && NODE_ENV=production npm run build
       - run: npm run size:check
-      - run: npm run sri
+      - run: NODE_ENV=production npm run sri
       - run: npm run pack:consumer
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:e2e
@@ -45,7 +45,5 @@ jobs:
         with:
           name: carbon-badge-${{ github.ref_name }}
           path: |
-            dist/cometweb-carbon-badge.esm.js
-            dist/cometweb-carbon-badge.umd.js
-            dist/release-manifest.json
+            dist/**
       - run: npm publish --access public --provenance
