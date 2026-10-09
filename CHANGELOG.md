@@ -2,6 +2,7 @@
 
 ## 2.0.2 — Unreleased
 
+- Remove overlapping numeric-regex repetitions to bound almost-numeric input parsing; omit proof URLs from non-published local cache without mutating fresh network results.
 - Add `/embed` as an ESM side-effect entry with lazy API/cache loading and `/api` as UI-free ESM/CommonJS helpers; keep the root SDK and its named exports compatible.
 - Bound optional module loading to 8 seconds, withhold the grade on chunk failure and stop API/render continuations after cancellation. Native module asset fetches cannot themselves be aborted.
 - Package the complete embed graph; record every JavaScript artifact's hash/SRI and check static-import closure size (10,500 B), complete embed size (15,000 B) and API formats (3,500 B) in CI. Entry SRI does not transitively verify imported chunks.

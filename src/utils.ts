@@ -1,7 +1,7 @@
 /** Pure helpers shared by normalization and rendering. */
 
 const STRICT_NUMBER =
-    /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
+    /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
 
 export function toFiniteNumberOrNull(value: unknown): number | null {
     if (typeof value === 'number') {

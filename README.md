@@ -76,13 +76,13 @@ All entry points belong to one npm package and share its version.
 
 | Import | Purpose | Production gzip in this candidate |
 | --- | --- | ---: |
-| `@cometweb/carbon-badge/embed` | ESM side effect: registers the component; API/cache code loads only in a visible API or snapshot mode | 10,247 B initially + 3,994 B optional |
-| `@cometweb/carbon-badge/api` | API client and response parser, without registering the component; ESM and CommonJS | 3,056 B ESM / 3,041 B CJS |
-| `@cometweb/carbon-badge` | Existing full SDK with named exports and automatic registration; single-file ESM and UMD | 13,667 B ESM / 13,706 B UMD |
+| `@cometweb/carbon-badge/embed` | ESM side effect: registers the component; API/cache code loads only in a visible API or snapshot mode | 10,244 B initially + 4,002 B optional |
+| `@cometweb/carbon-badge/api` | API client and response parser, without registering the component; ESM and CommonJS | 3,056 B ESM / 3,040 B CJS |
+| `@cometweb/carbon-badge` | Existing full SDK with named exports and automatic registration; single-file ESM and UMD | 13,668 B ESM / 13,708 B UMD |
 
 The embed is a side-effect entry with no public named exports. Use the root SDK for `CometWebCarbonBadge`, scoring helpers or programmatic registration, and `/api` for `fetchSingleFlight`, `parseApiResponse`, API URL validation and retry-delay helpers. Existing root imports keep their API.
 
-Local mode never requests the optional module. API/snapshot mode loads it once per page; subsequent badge instances and reloads reuse the browser's module cache. The complete network embed is 14,241 B gzip, slightly larger than the single-file SDK. Splitting reduces initial local loading, not every integration's total download.
+Local mode never requests the optional module. API/snapshot mode loads it once per page; subsequent badge instances and reloads reuse the browser's module cache. The complete network embed is 14,246 B gzip, slightly larger than the single-file SDK. Splitting reduces initial local loading, not every integration's total download.
 
 Publish each embed directory as one immutable version. Copying only the entry, renaming it, or changing just its query string can break relative module resolution or mix versions. Serve all JavaScript with a JavaScript MIME type. CSP `script-src` must permit the module origin; network modes additionally need `connect-src https://app.cometweb.io`. `dist/release-manifest.json` records the module graph and every artifact's hash/SRI, including the optional chunk; chunk file names alone are not an integrity guarantee.
 

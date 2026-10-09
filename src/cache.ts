@@ -219,7 +219,8 @@ export function setCache(
             ? Date.parse(data.validUntil)
             : Number.NaN;
         const entry: CacheEntry = {
-            data,
+            // Published results bypass cache; proof URLs need not persist for other sources.
+            data: { ...data, evidenceUrl: null },
             ts: now,
             expiresAt: Number.isFinite(serverExpiry)
                 ? Math.min(localExpiry, serverExpiry)

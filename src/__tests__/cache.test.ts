@@ -112,6 +112,14 @@ describe('setCache / getCached', () => {
         expect(getCached(key)).toEqual(mockData);
     });
 
+    it('omits proof URLs from non-published storage without changing the network result', () => {
+        const data = { ...mockData, evidenceUrl: 'https://cometweb.io/carbon-badge/abcdef' };
+        setCache(key, data, 720);
+        expect(JSON.parse(localStorage.getItem(key)!).data).toEqual({ ...data, evidenceUrl: null });
+        expect(getFreshCached(key)).toMatchObject({ co2Grams: 0.23, score: 'B', evidenceUrl: null });
+        expect(data.evidenceUrl).toBe('https://cometweb.io/carbon-badge/abcdef');
+    });
+
     it('tracks keys in the owned index', () => {
         setCache(key, mockData, 720);
         const index = JSON.parse(localStorage.getItem(__CACHE_INDEX_KEY)!);

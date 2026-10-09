@@ -18,6 +18,21 @@ describe('toFiniteNumberOrNull', () => {
         expect(toFiniteNumberOrNull('3.14')).toBe(3.14);
     });
 
+    it('preserves decimal and exponent syntax without accepting other Number formats', () => {
+        for (const [raw, expected] of [['1.', 1], ['-.25e+3', -250], ['001.2e-2', 0.012], ['1.e2', 100]] as const) {
+            expect(toFiniteNumberOrNull(raw)).toBe(expected);
+        }
+        for (const raw of ['+1', '0x10', '1_000', '.', '1e']) expect(toFiniteNumberOrNull(raw)).toBeNull();
+    });
+
+    it('rejects long almost-numeric API input without polynomial backtracking', () => {
+        const start = performance.now();
+        const digits = '9'.repeat(100_000);
+        expect(toFiniteNumberOrNull(digits + 'X')).toBeNull();
+        expect(toFiniteNumberOrNull(digits + 'e9X')).toBeNull();
+        expect(performance.now() - start).toBeLessThan(1000);
+    });
+
     it('returns null for NaN', () => {
         expect(toFiniteNumberOrNull(NaN)).toBeNull();
         expect(toFiniteNumberOrNull('abc')).toBeNull();
