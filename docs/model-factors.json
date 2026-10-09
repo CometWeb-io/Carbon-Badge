@@ -1,0 +1,14 @@
+{
+  "id": "swdm-v4-global-494-v1",
+  "formulaId": "swdm-v4-lite-first-load-v1",
+  "scoreModelId": "carbon-badge-bands-v1",
+  "scope": "first-load approximation using observed document transfer",
+  "bytesPerGB": 1000000000,
+  "gridIntensityGCo2ePerKwh": 494,
+  "gridDataYear": null,
+  "operationalKwhPerGB": { "dataCenter": 0.055, "network": 0.059, "device": 0.080 },
+  "embodiedKwhPerGB": { "dataCenter": 0.012, "network": 0.013, "device": 0.081 },
+  "source": "https://sustainablewebdesign.org/estimating-digital-emissions/",
+  "reviewedOn": "2026-10-09",
+  "note": "The source publishes 494 g/kWh but does not pin a dataset year. This is a modelled global proxy, not measured electricity use or a regional estimate."
+}

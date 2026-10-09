@@ -61,6 +61,7 @@ export async function waitForPageQuiescence(
         };
 
         const done = () => {
+            if (remaining() <= 0) { onHardTimeout(); return; }
             cleanup();
             resolve();
         };
@@ -82,10 +83,11 @@ export async function waitForPageQuiescence(
             });
             observer.observe({ type: 'resource', buffered: true });
         } catch {
-            /* PerformanceObserver unavailable */
+            onHardTimeout();
+            return;
         }
 
-        quietTimer = setTimeout(done, Math.min(quietMs, hardRemaining));
+        quietTimer = setTimeout(done, quietMs);
         hardTimer = setTimeout(onHardTimeout, hardRemaining);
         signal.addEventListener('abort', onAbort, { once: true });
         if (signal.aborted) onAbort();

@@ -5,9 +5,9 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import '../index';
-import { SCORE_MODEL_ID_COMETWEB_BANDS_V1 } from '../types';
+import { BADGE_CACHE_SCHEMA, SCORE_MODEL_ID_COMETWEB_BANDS_V1 } from '../types';
 import { clearInFlightRequests } from '../api-client';
-import { buildCacheKey, setCache } from '../cache';
+import { buildCacheKey } from '../cache';
 import { canonicalizeBadgeUrl } from '../normalize';
 
 const TAG = 'cometweb-carbon-badge';
@@ -186,16 +186,20 @@ describe('CB-04 no host estimate fallback on API failure', () => {
     });
 });
 
-describe('CB-02 tabindex only after connect', () => {
+describe('CB-02 custom-element construction and keyboard scope', () => {
     it('createElement after define yields a real custom element without constructor tabindex race', () => {
         const el = document.createElement(TAG) as HTMLElement;
         expect(el instanceof HTMLElement).toBe(true);
         expect(el.tagName.toLowerCase()).toBe(TAG);
-        // tabindex applied in connectedCallback, not constructor
+        // A negative host tabindex can exclude shadow controls from keyboard navigation.
         expect(el.hasAttribute('tabindex')).toBe(false);
         document.body.appendChild(el);
-        expect(el.getAttribute('tabindex')).toBe('-1');
+        expect(el.hasAttribute('tabindex')).toBe(false);
         expect(el.shadowRoot).toBeTruthy();
+        el.setAttribute('tabindex', '0');
+        el.remove();
+        document.body.appendChild(el);
+        expect(el.getAttribute('tabindex')).toBe('0');
     });
 });
 
@@ -236,6 +240,31 @@ describe('race condition guard (_loadId)', () => {
 });
 
 describe('API response validation', () => {
+    it('renders N/D for an unknown measurement source without a load event', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(mockOkResponse(makeApiResponse({
+            measurement_source: 'future_source',
+        })));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const el = document.createElement(TAG) as any;
+        el.setAttribute('url', 'https://example.com');
+        el.setAttribute('mode', 'api');
+        let loadFired = false;
+        let errorDetail: any = null;
+        el.addEventListener('cometweb:badge-load', () => { loadFired = true; });
+        el.addEventListener('cometweb:badge-error', (event: Event) => {
+            errorDetail = (event as CustomEvent).detail;
+        });
+        document.body.appendChild(el);
+
+        await vi.waitFor(() => expect(errorDetail).not.toBeNull(), { timeout: 2000 });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(loadFired).toBe(false);
+        expect(el.score).toBeNull();
+        expect(el.badgeData.source).toBeNull();
+        expect(el.shadowRoot?.textContent).toContain('N/D');
+    });
+
     it('renders revoked measurements as N/D', async () => {
         vi.stubGlobal(
             'fetch',
@@ -289,7 +318,7 @@ describe('API response validation', () => {
             { timeout: 2000 },
         );
         expect(el.score).toBeNull();
-        expect(el.shadowRoot?.innerHTML).not.toContain('Verified by CometWeb');
+        expect(el.shadowRoot?.innerHTML).not.toContain('Published by CometWeb');
     });
 
     it('ignores removed api-key / untrusted api-url attributes', async () => {
@@ -371,10 +400,43 @@ describe('API response validation', () => {
 
         expect(el.score).toBe('B');
         expect(el.shadowRoot?.innerHTML).toContain('Powered by CometWeb');
-        expect(el.shadowRoot?.innerHTML).not.toContain('Verified by CometWeb');
+        expect(el.shadowRoot?.innerHTML).not.toContain('Published by CometWeb');
     });
 
-    it('shows Verified footer only for a published snapshot with trusted evidence', async () => {
+    it('does not publish a cometweb_scan even with snapshot-looking evidence', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(mockOkResponse(makeApiResponse({
+            public_id: 'abcdef0123',
+            measurement_source: 'cometweb_scan',
+            verified: true,
+            measured_at: new Date(Date.now() - 60_000).toISOString(),
+            valid_until: new Date(Date.now() + 86_400_000).toISOString(),
+            evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
+            ...SNAPSHOT_PROVENANCE,
+        })));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const el = document.createElement(TAG) as any;
+        el.setAttribute('url', 'https://example.com');
+        el.setAttribute('mode', 'api');
+        let detail: any = null;
+        el.addEventListener('cometweb:badge-load', (event: Event) => {
+            detail = (event as CustomEvent).detail;
+        });
+        document.body.appendChild(el);
+
+        await vi.waitFor(() => expect(detail).not.toBeNull(), { timeout: 2000 });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(el.score).toBe('B');
+        expect(el.badgeData.source).toBe('cometweb_scan');
+        expect(detail).toMatchObject({ measurementSource: 'cometweb_scan', published: false });
+        expect(el.shadowRoot?.textContent).toContain('Powered by CometWeb');
+        expect(el.shadowRoot?.textContent).not.toContain('Published by CometWeb');
+        expect(el.shadowRoot?.textContent).not.toContain('Published snapshot');
+        expect(el.shadowRoot?.querySelector('.cw-badge')?.getAttribute('href'))
+            .toBe('https://cometweb.io/carbon-badge');
+    });
+
+    it('shows Published footer only for a published snapshot with trusted evidence', async () => {
         vi.stubGlobal(
             'fetch',
             vi.fn().mockResolvedValue({
@@ -409,7 +471,65 @@ describe('API response validation', () => {
         });
 
         expect(el.score).toBe('A');
-        expect(el.shadowRoot?.innerHTML).toContain('Verified by CometWeb');
+        expect(el.shadowRoot?.innerHTML).toContain('Published by CometWeb');
+    });
+
+    it('rechecks publication after an API snapshot is revoked', async () => {
+        const published = makeApiResponse({
+            public_id: 'abcdef0123',
+            measurement_source: 'published_snapshot',
+            measured_at: new Date(Date.now() - 60_000).toISOString(),
+            valid_until: new Date(Date.now() + 86_400_000).toISOString(),
+            evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
+            ...SNAPSHOT_PROVENANCE,
+        });
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(mockOkResponse(published))
+            .mockResolvedValueOnce(mockFailResponse(404));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const first = document.createElement(TAG) as any;
+        first.setAttribute('url', 'https://example.com');
+        first.setAttribute('mode', 'api');
+        document.body.appendChild(first);
+        await vi.waitFor(() => expect(first.score).toBe('B'), { timeout: 2000 });
+        first.remove();
+
+        const second = document.createElement(TAG) as any;
+        second.setAttribute('url', 'https://example.com');
+        second.setAttribute('mode', 'api');
+        document.body.appendChild(second);
+        await vi.waitFor(() => expect(second.measurementStatus).toBe('unknown'), { timeout: 2000 });
+
+        expect(second.score).toBeNull();
+        expect(second.shadowRoot?.textContent).toContain('N/D');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not reuse a response with Cache-Control no-store', async () => {
+        const response = {
+            ...mockOkResponse(makeApiResponse()),
+            headers: { get: (name: string) =>
+                name.toLowerCase() === 'cache-control' ? 'private, no-store' : null },
+        };
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(response)
+            .mockResolvedValueOnce(mockFailResponse(404));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const first = document.createElement(TAG) as any;
+        first.setAttribute('url', 'https://example.com');
+        first.setAttribute('mode', 'api');
+        document.body.appendChild(first);
+        await vi.waitFor(() => expect(first.score).toBe('B'), { timeout: 2000 });
+        first.remove();
+
+        const second = document.createElement(TAG) as any;
+        second.setAttribute('url', 'https://example.com');
+        second.setAttribute('mode', 'api');
+        document.body.appendChild(second);
+        await vi.waitFor(() => expect(second.measurementStatus).toBe('unknown'), { timeout: 2000 });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
     it('omits % of web when cleaner_than is absent (CB-07)', async () => {
@@ -517,47 +637,37 @@ describe('snapshot-first owner mode', () => {
         });
     });
 
-    it('fail-closes when snapshot-id is combined with mode=api', async () => {
+    it.each([
+        ['api', 'abcdef0123'],
+        ['estimate', 'abcdef0123'],
+        ['api', '   '],
+    ])('fail-closes mode=%s with snapshot-id=%s', async (mode, snapshotId) => {
         const fetchMock = vi.fn();
         vi.stubGlobal('fetch', fetchMock);
 
         const el = document.createElement(TAG) as any;
-        el.setAttribute('url', 'https://example.com');
-        el.setAttribute('snapshot-id', 'abcdef0123');
-        el.setAttribute('mode', 'api');
-
+        el.setAttribute('snapshot-id', snapshotId);
+        el.setAttribute('mode', mode);
         document.body.appendChild(el);
+
         await vi.waitFor(
-            () =>
-                expect(el.shadowRoot?.innerHTML).toContain(
-                    'Conflicting mode and snapshot-id',
-                ),
+            () => expect(el.shadowRoot?.innerHTML).toContain('Conflicting mode and snapshot-id'),
             { timeout: 2000 },
         );
         expect(el.score).toBeNull();
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it('fail-closes when snapshot-id is combined with mode=estimate', async () => {
+    it('rejects an empty snapshot-id instead of estimating the page', async () => {
         const fetchMock = vi.fn();
         vi.stubGlobal('fetch', fetchMock);
-        vi.stubGlobal('performance', {
-            getEntriesByType: () => [
-                { transferSize: 200 * 1024, encodedBodySize: 200 * 1024 },
-            ],
-            now: () => Date.now(),
-        });
 
         const el = document.createElement(TAG) as any;
-        el.setAttribute('snapshot-id', 'abcdef0123');
-        el.setAttribute('mode', 'estimate');
-
+        el.setAttribute('snapshot-id', '   ');
         document.body.appendChild(el);
+
         await vi.waitFor(
-            () =>
-                expect(el.shadowRoot?.innerHTML).toContain(
-                    'Conflicting mode and snapshot-id',
-                ),
+            () => expect(el.shadowRoot?.innerHTML).toContain('Missing snapshot ID'),
             { timeout: 2000 },
         );
         expect(el.score).toBeNull();
@@ -585,6 +695,25 @@ describe('snapshot-first owner mode', () => {
             '/public/carbon-badge?url=',
         );
         expect(String(fetchMock.mock.calls[0][0])).not.toContain('/id/');
+    });
+
+    it('clears a loaded API grade when snapshot-id is added', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(mockOkResponse(makeApiResponse()));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const el = document.createElement(TAG) as any;
+        el.setAttribute('url', 'https://example.com');
+        el.setAttribute('mode', 'api');
+        document.body.appendChild(el);
+        await vi.waitFor(() => expect(el.score).toBe('B'), { timeout: 2000 });
+
+        el.setAttribute('snapshot-id', 'abcdef0123');
+        await vi.waitFor(
+            () => expect(el.shadowRoot?.innerHTML).toContain('Conflicting mode and snapshot-id'),
+            { timeout: 2000 },
+        );
+        expect(el.score).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it('rejects a response for a different snapshot without URL fallback', async () => {
@@ -725,7 +854,7 @@ describe('snapshot-first owner mode', () => {
         document.body.appendChild(second);
         await vi.waitFor(() => expect(second.score).toBe('B'), { timeout: 1000 });
 
-        expect(second.shadowRoot?.innerHTML).toContain('Verified by CometWeb');
+        expect(second.shadowRoot?.innerHTML).toContain('Published by CometWeb');
         expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 });
@@ -772,7 +901,7 @@ describe('strict modes and Verified trust boundary', () => {
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it('never shows Verified from a poisoned localStorage cache (CB-02)', async () => {
+    it('rejects a poisoned published snapshot in localStorage (CB-02)', async () => {
         const canonical = canonicalizeBadgeUrl('https://example.com')!;
         const cacheKey = buildCacheKey({
             canonicalUrl: canonical,
@@ -781,9 +910,8 @@ describe('strict modes and Verified trust boundary', () => {
             apiUrl: 'https://app.cometweb.io/api',
             greenHost: false,
         });
-        setCache(
-            cacheKey,
-            {
+        localStorage.setItem(cacheKey, JSON.stringify({
+            data: {
                 url: canonical,
                 publicId: 'abcdef0123',
                 co2Grams: 0.15,
@@ -791,7 +919,7 @@ describe('strict modes and Verified trust boundary', () => {
                 cleanerThan: null,
                 pageWeightKb: 100,
                 greenHost: false,
-                verified: true,
+                originMatched: true,
                 timestamp: Date.now(),
                 status: 'ready',
                 source: 'published_snapshot',
@@ -802,8 +930,12 @@ describe('strict modes and Verified trust boundary', () => {
                 validUntil: new Date(Date.now() + 86_400_000).toISOString(),
                 evidenceUrl: 'https://cometweb.io/carbon-badge/abcdef0123',
             },
-            720,
-        );
+            ts: Date.now(),
+            expiresAt: Date.now() + 60_000,
+            schema: BADGE_CACHE_SCHEMA,
+        }));
+        const fetchMock = vi.fn().mockResolvedValue(mockFailResponse(404));
+        vi.stubGlobal('fetch', fetchMock);
 
         const el = document.createElement(TAG) as any;
         let detail: any = null;
@@ -814,14 +946,16 @@ describe('strict modes and Verified trust boundary', () => {
         el.setAttribute('mode', 'api');
         document.body.appendChild(el);
 
-        await vi.waitFor(() => expect(el.score).toBe('A'), { timeout: 2000 });
+        await vi.waitFor(() => expect(el.measurementStatus).toBe('unknown'), { timeout: 2000 });
+        expect(el.score).toBeNull();
+        expect(localStorage.getItem(cacheKey)).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(el.shadowRoot?.innerHTML).toContain('Powered by CometWeb');
-        expect(el.shadowRoot?.innerHTML).not.toContain('Verified by CometWeb');
-        expect(detail?.verified).toBe(false);
-        expect(detail?.retrievalSource).toBe('cache');
+        expect(el.shadowRoot?.innerHTML).not.toContain('Published by CometWeb');
+        expect(detail).toBeNull();
     });
 
-    it('emits effective verified separately from backendVerified (CB-16)', async () => {
+    it('emits publication separately from request-origin placement (CB-16)', async () => {
         vi.stubGlobal(
             'fetch',
             vi.fn().mockResolvedValue({
@@ -837,6 +971,7 @@ describe('strict modes and Verified trust boundary', () => {
                             score: 'A',
                             co2_grams: 0.15,
                             verified: true,
+                            verification_reason: 'origin_match',
                             public_id: 'abcdef0123',
                             measurement_source: 'published_snapshot',
                             measured_at: new Date(Date.now() - 60_000).toISOString(),
@@ -861,9 +996,10 @@ describe('strict modes and Verified trust boundary', () => {
         document.body.appendChild(el);
 
         await vi.waitFor(() => expect(detail).not.toBeNull(), { timeout: 2000 });
-        expect(detail.verified).toBe(true);
-        expect(detail.backendVerified).toBe(true);
-        expect(el.shadowRoot?.innerHTML).toContain('Verified by CometWeb');
+        expect(detail.published).toBe(true);
+        expect(detail.originMatched).toBe(true);
+        expect(detail).not.toHaveProperty('backendVerified');
+        expect(el.shadowRoot?.innerHTML).toContain('Published by CometWeb');
     });
 });
 

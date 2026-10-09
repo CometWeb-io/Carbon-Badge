@@ -1,12 +1,12 @@
 /**
  * @cometweb/carbon-badge
  *
- * Lightweight web component showing CO₂e emissions per page view.
+ * Lightweight web component estimating CO₂e for a first document load.
  * Powered by CometWeb & a documented SWDM v4 first-load lite approximation.
  *
  * Usage:
- *   <script type="module" src="https://unpkg.com/@cometweb/carbon-badge@1.0.9/dist/cometweb-carbon-badge.esm.js"></script>
- *   <cometweb-carbon-badge snapshot-id="<published_public_id>"></cometweb-carbon-badge>
+ *   <script type="module" src="/vendor/cometweb-carbon-badge.esm.js"></script>
+ *   <cometweb-carbon-badge theme="dark"></cometweb-carbon-badge>
  *
  * Or via npm:
  *   import { registerCarbonBadge } from '@cometweb/carbon-badge';
@@ -14,12 +14,11 @@
  */
 
 export { CometWebCarbonBadge, registerCarbonBadge } from './badge';
+export { parseApiResponse } from './api-response';
 export { estimateCO2, estimateCO2Detailed, co2ToScore, initializeResourceTiming } from './estimator';
 export {
     canonicalizeBadgeUrl,
-    parseApiResponse,
     normalizeBadgeData,
-    sanitizeAllowedQueryKeys,
 } from './normalize';
 export type { HttpEnvelope } from './api-client';
 export {
@@ -30,6 +29,8 @@ export {
     fetchSingleFlight,
 } from './api-client';
 export {
+    BADGE_VERSION,
+    FACTOR_SET_ID_SWDM_V4,
     SCORE_MODEL_ID_COMETWEB_BANDS_V1,
     FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1,
 } from './types';

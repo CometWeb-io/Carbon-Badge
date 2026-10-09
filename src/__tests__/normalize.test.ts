@@ -1,12 +1,11 @@
+import { parseApiResponse } from '../api-response';
 /**
  * Tests for URL canonicalize + API fail-closed normalizer
  */
 import { describe, it, expect } from 'vitest';
 import {
     canonicalizeBadgeUrl,
-    parseApiResponse,
     normalizeBadgeData,
-    sanitizeAllowedQueryKeys,
 } from '../normalize';
 import { SCORE_MODEL_ID_COMETWEB_BANDS_V1 } from '../types';
 
@@ -31,22 +30,20 @@ describe('canonicalizeBadgeUrl', () => {
         ).toBe('https://example.com/catalog');
     });
 
-    it('keeps only allowlisted query keys when provided', () => {
+    it('strips semantic query keys too', () => {
         expect(
             canonicalizeBadgeUrl(
                 'https://example.com/c?item=123&email=x@y.z&utm_source=a',
-                ['item'],
             ),
-        ).toBe('https://example.com/c?item=123');
+        ).toBe('https://example.com/c');
     });
 
-    it('drops sensitive keys even when allowlisted', () => {
+    it('strips sensitive and mixed-case keys', () => {
         expect(
             canonicalizeBadgeUrl(
-                'https://example.com/c?item=1&token=secret',
-                ['item', 'token'],
+                'https://example.com/c?item=1&ID_TOKEN=secret&client_secret=x&x-amz-signature=y',
             ),
-        ).toBe('https://example.com/c?item=1');
+        ).toBe('https://example.com/c');
     });
 
     it('returns null for non-http URLs', () => {
@@ -61,16 +58,54 @@ describe('canonicalizeBadgeUrl', () => {
     });
 });
 
-describe('sanitizeAllowedQueryKeys', () => {
-    it('dedupes and strips sensitive keys', () => {
-        expect(
-            sanitizeAllowedQueryKeys(['Item', 'item', 'token', 'email', 'id']),
-        ).toEqual(['item', 'id']);
-    });
-});
-
 describe('parseApiResponse', () => {
     const requested = 'https://example.com';
+
+    it.each(['future_source', 'cache', '   ', null])(
+        'rejects an unrecognized measurement_source=%s',
+        (measurementSource) => {
+            expect(parseApiResponse(
+                {
+                    url: requested,
+                    co2_grams: 0.2,
+                    status: 'ready',
+                    measurement_source: measurementSource,
+                },
+                { requestedUrl: requested },
+            )).toBeNull();
+        },
+    );
+
+    it('keeps explicit api and source-less legacy responses distinct from unknown values', () => {
+        const base = { url: requested, co2_grams: 0.2, status: 'ready' };
+        expect(parseApiResponse(
+            { ...base, measurement_source: 'api' },
+            { requestedUrl: requested },
+        )?.source).toBe('api');
+        expect(parseApiResponse(base, { requestedUrl: requested })?.source).toBe('api');
+    });
+
+    it('keeps cometweb_scan distinct from a published snapshot', () => {
+        const now = Date.parse('2026-10-05T12:00:00Z');
+        const data = parseApiResponse(
+            {
+                url: requested,
+                public_id: 'abcdef0123',
+                co2_grams: 0.2,
+                status: 'ready',
+                verified: true,
+                measurement_source: 'cometweb_scan',
+                measured_at: '2026-10-05T11:00:00Z',
+                valid_until: '2026-10-06T11:00:00Z',
+                evidence_url: 'https://cometweb.io/carbon-badge/abcdef0123',
+                ...SNAPSHOT_PROVENANCE,
+            },
+            { requestedUrl: requested, now },
+        );
+
+        expect(data?.source).toBe('cometweb_scan');
+        expect(data?.score).toBe('B');
+    });
 
     it('maps formula_version into formulaId', () => {
         const data = parseApiResponse(
@@ -127,7 +162,7 @@ describe('parseApiResponse', () => {
         ).toBeNull();
     });
 
-    it('uses allow-query consistently for request/response identity', () => {
+    it('uses query-free identity for request, response and returned data', () => {
         const data = parseApiResponse(
             {
                 url: 'https://example.com/product?id=123',
@@ -136,10 +171,9 @@ describe('parseApiResponse', () => {
             },
             {
                 requestedUrl: 'https://example.com/product?id=123',
-                allowedQueryKeys: ['id'],
             },
         );
-        expect(data?.url).toBe('https://example.com/product?id=123');
+        expect(data?.url).toBe('https://example.com/product');
         expect(
             parseApiResponse(
                 {
@@ -149,10 +183,9 @@ describe('parseApiResponse', () => {
                 },
                 {
                     requestedUrl: 'https://example.com/product?id=123',
-                    allowedQueryKeys: ['id'],
                 },
             ),
-        ).toBeNull();
+        ).toMatchObject({ url: 'https://example.com/product' });
     });
 
     it('trusts snapshot identity over the embedding page URL', () => {
@@ -177,7 +210,7 @@ describe('parseApiResponse', () => {
         expect(data?.url).toBe('https://example.com/published-home');
     });
 
-    it('rejects an expired published snapshot even when API says ready', () => {
+    it('preserves an expired published snapshot even when API says ready', () => {
         expect(
             parseApiResponse(
                 {
@@ -196,7 +229,7 @@ describe('parseApiResponse', () => {
                     now: Date.parse('2026-09-23T00:00:00Z'),
                 },
             ),
-        ).toBeNull();
+        ).toMatchObject({ status: 'stale', co2Grams: null, score: null });
     });
 
     it('rejects snapshots missing methodological provenance', () => {
@@ -240,7 +273,7 @@ describe('parseApiResponse', () => {
         ).toBeNull();
     });
 
-    it('rejects scan aliases and partial status on the snapshot endpoint', () => {
+    it('rejects scan aliases and preserves partial status on the snapshot endpoint', () => {
         expect(
             parseApiResponse(
                 {
@@ -270,7 +303,7 @@ describe('parseApiResponse', () => {
                 },
                 { requestedUrl: requested, requestedSnapshotId: 'abcdef0123' },
             ),
-        ).toBeNull();
+        ).toMatchObject({ status: 'partial', co2Grams: null, score: null });
     });
 
     it('rejects unsupported runtime statuses instead of treating them as ready', () => {
@@ -288,7 +321,7 @@ describe('parseApiResponse', () => {
         ).toBe('ready');
     });
 
-    it('rejects a malformed snapshot freshness deadline', () => {
+    it('withholds the grade for a malformed snapshot freshness deadline', () => {
         expect(
             parseApiResponse(
                 {
@@ -306,7 +339,7 @@ describe('parseApiResponse', () => {
                     requestedSnapshotId: 'abcdef0123',
                 },
             ),
-        ).toBeNull();
+        ).toMatchObject({ status: 'partial', co2Grams: null, score: null });
     });
 
     it('maps finite CO₂ to letter bands without trusting API score', () => {
@@ -354,19 +387,19 @@ describe('parseApiResponse', () => {
         expect(data!.cleanerThan).toBeNull();
     });
 
-    it('rejects revoked and unknown responses', () => {
+    it('preserves revoked and unknown responses without grades', () => {
         expect(
             parseApiResponse(
                 { url: requested, co2_grams: 0.2, status: 'revoked' },
                 { requestedUrl: requested },
             ),
-        ).toBeNull();
+        ).toMatchObject({ status: 'revoked', co2Grams: null, score: null });
         expect(
             parseApiResponse(
                 { url: requested, co2_grams: 0.2, status: 'unknown' },
                 { requestedUrl: requested },
             ),
-        ).toBeNull();
+        ).toMatchObject({ status: 'unknown', co2Grams: null, score: null });
     });
 
     it('fail-closes expired API measurements (no letter from stale data)', () => {
@@ -383,7 +416,7 @@ describe('parseApiResponse', () => {
                     now: Date.parse('2026-09-22T00:00:00.000Z'),
                 },
             ),
-        ).toBeNull();
+        ).toMatchObject({ status: 'stale', co2Grams: null, score: null });
     });
 });
 
@@ -397,7 +430,7 @@ describe('normalizeBadgeData', () => {
             cleanerThan: 10,
             pageWeightKb: 1,
             greenHost: false,
-            verified: false,
+            originMatched: null,
             timestamp: 1,
             status: 'ready',
             source: 'api',

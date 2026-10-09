@@ -1,5 +1,5 @@
 /**
- * @cometweb/carbon-badge — localStorage caching layer (schema v5)
+ * @cometweb/carbon-badge — localStorage caching layer (schema v8, API only)
  *
  * Key includes canonical URL, mode, api-url hash, green-host, and schema version
  * so attribute changes never silently reuse a stale measurement.
@@ -9,12 +9,14 @@
  */
 
 import type { BadgeData, CacheEntry, CacheKeyParts } from './types';
-import { BADGE_CACHE_SCHEMA } from './types';
+import { BADGE_CACHE_SCHEMA, BADGE_VERSION, SCORE_MODEL_ID_COMETWEB_BANDS_V1, FACTOR_SET_ID_SWDM_V4 } from './types';
 
 const CACHE_PREFIX = `cometweb:carbon-badge:v${BADGE_CACHE_SCHEMA}:`;
 const CACHE_INDEX_KEY = 'cometweb:carbon-badge:index';
 /** Owned legacy prefixes only — never wipe arbitrary `cwb:` host keys. */
 const OWNED_LEGACY_PREFIXES = [
+    'cometweb:carbon-badge:v7:',
+    'cometweb:carbon-badge:v6:',
     'cometweb:carbon-badge:v3:',
     'cometweb:carbon-badge:v2:',
     'cwb:v3:',
@@ -87,6 +89,9 @@ export function buildCacheKey(parts: CacheKeyParts): string {
             hashApiUrl(parts.apiUrl),
             green,
             String(BADGE_CACHE_SCHEMA),
+            BADGE_VERSION,
+            SCORE_MODEL_ID_COMETWEB_BANDS_V1,
+            FACTOR_SET_ID_SWDM_V4,
         ].join('|')
     );
 }
@@ -100,11 +105,12 @@ export function getCached(key: string): BadgeData | null {
         if (!isRecord(parsed)) return null;
         if (parsed.schema !== BADGE_CACHE_SCHEMA) return null;
         if (!isRecord(parsed.data)) return null;
+        if (parsed.data.source === 'published_snapshot') return null;
 
         // localStorage is host-controlled — never treat cache as Verified proof.
         return {
             ...(parsed.data as unknown as BadgeData),
-            verified: false,
+            originMatched: null,
         };
     } catch {
         return null;
@@ -128,49 +134,22 @@ export function getFreshCached(
         if (!raw) return null;
 
         const parsed: unknown = JSON.parse(raw);
-        if (!isRecord(parsed)) {
-            localStorage.removeItem(key);
-            forgetKey(key);
-            return null;
-        }
-        if (parsed.schema !== BADGE_CACHE_SCHEMA || !isRecord(parsed.data)) {
+        if (!isRecord(parsed) || parsed.schema !== BADGE_CACHE_SCHEMA || !isRecord(parsed.data)) {
             localStorage.removeItem(key);
             forgetKey(key);
             return null;
         }
 
-        const ts = parsed.ts;
-        const expiresAt = parsed.expiresAt;
+        const { ts, expiresAt, data } = parsed;
+        // One eviction path for consent, malformed/expired timestamps and unusable lifecycle states.
         if (
-            typeof ts !== 'number' ||
-            typeof expiresAt !== 'number' ||
-            !Number.isFinite(ts) ||
-            !Number.isFinite(expiresAt) ||
-            ts > now ||
-            expiresAt <= now
-        ) {
-            localStorage.removeItem(key);
-            forgetKey(key);
-            return null;
-        }
-
-        if (
-            typeof maxAgeMinutes === 'number' &&
-            Number.isFinite(maxAgeMinutes) &&
-            maxAgeMinutes > 0 &&
-            ts + maxAgeMinutes * 60_000 <= now
-        ) {
-            localStorage.removeItem(key);
-            forgetKey(key);
-            return null;
-        }
-
-        const status = (parsed.data as { status?: string }).status;
-        if (
-            status === 'stale' ||
-            status === 'unknown' ||
-            status === 'revoked' ||
-            status === 'partial'
+            data.source === 'published_snapshot' ||
+            typeof ts !== 'number' || typeof expiresAt !== 'number' ||
+            !Number.isFinite(ts) || !Number.isFinite(expiresAt) ||
+            ts > now || expiresAt <= now ||
+            typeof maxAgeMinutes === 'number' && Number.isFinite(maxAgeMinutes) &&
+                maxAgeMinutes > 0 && ts + maxAgeMinutes * 60_000 <= now ||
+            ['stale', 'unknown', 'revoked', 'partial'].includes(data.status as string)
         ) {
             localStorage.removeItem(key);
             forgetKey(key);
@@ -179,7 +158,7 @@ export function getFreshCached(
 
         return {
             ...(parsed.data as unknown as BadgeData),
-            verified: false,
+            originMatched: null,
         };
     } catch {
         try {
@@ -199,6 +178,7 @@ export function isCacheValid(key: string, maxAgeMinutes?: number): boolean {
 
         const entry: CacheEntry = JSON.parse(raw);
         if (entry.schema !== BADGE_CACHE_SCHEMA) return false;
+        if (entry.data?.source === 'published_snapshot') return false;
         if (!Number.isFinite(entry.ts) || !Number.isFinite(entry.expiresAt)) {
             return false;
         }
@@ -231,6 +211,7 @@ export function setCache(
     data: BadgeData,
     ttlMinutes: number,
 ): void {
+    if (data.source === 'published_snapshot' || data.status !== 'ready') return;
     try {
         const now = Date.now();
         const localExpiry = now + ttlMinutes * 60 * 1000;
@@ -238,7 +219,8 @@ export function setCache(
             ? Date.parse(data.validUntil)
             : Number.NaN;
         const entry: CacheEntry = {
-            data,
+            // Published results bypass cache; proof URLs need not persist for other sources.
+            data: { ...data, evidenceUrl: null },
             ts: now,
             expiresAt: Number.isFinite(serverExpiry)
                 ? Math.min(localExpiry, serverExpiry)
@@ -282,6 +264,7 @@ export function clearExpired(): void {
                 const entry: CacheEntry = JSON.parse(raw);
                 if (
                     entry.schema !== BADGE_CACHE_SCHEMA ||
+                    entry.data?.source === 'published_snapshot' ||
                     !Number.isFinite(entry.ts) ||
                     !Number.isFinite(entry.expiresAt) ||
                     entry.ts > now ||

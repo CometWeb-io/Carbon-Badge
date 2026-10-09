@@ -14,6 +14,7 @@ export type MeasurementStatus =
 export type MeasurementSource =
     | 'api'
     | 'estimate'
+    | 'cometweb_scan'
     | 'published_snapshot'
     | 'http_estimate';
 
@@ -29,10 +30,17 @@ export interface BadgeData {
     score: ScoreLetter | null;
     /** Percentile vs cohort when API supplies a real benchmark; else null. */
     cleanerThan: number | null;
+    /** @deprecated Binary KiB, rounded for backward compatibility. */
     pageWeightKb: number | null;
+    pageWeightKiB?: number | null;
+    pageWeightKB?: number | null;
+    factorSetId?: string | null;
+    /** Elapsed document time in ms, not wall-clock dates. */
+    measurementWindowStartMs?: number;
+    measurementWindowEndMs?: number;
     greenHost: boolean | null;
-    /** Backend verification signal; rendering also requires bound evidence. */
-    verified: boolean;
+    /** Request-time placement signal, not evidence of domain ownership. */
+    originMatched: boolean | null;
     timestamp: number;
     status: MeasurementStatus;
     /** Set only when a measurement exists; null on N/D / error. */
@@ -44,6 +52,14 @@ export interface BadgeData {
     measuredAt: string | null;
     validUntil: string | null;
     evidenceUrl: string | null;
+    /** Stable diagnostic code; N/D does not erase the measurement lifecycle. */
+    reasonCode?: string;
+    measurementScope?: 'document-first-load';
+    /** Observed bytes only; unknown transfer has no inferred upper bound. */
+    networkTransferBytes?: number;
+    encodedBodyBytes?: number;
+    cachedBodyBytes?: number;
+    transferUpperBoundBytes?: number | null;
     /** True when local estimate is partial or unavailable. */
     estimatePartial?: boolean;
     measuredResourceCount?: number;
@@ -88,6 +104,7 @@ export interface APIResponse {
     verification_reason?: string;
     cached?: boolean;
     ttl?: number;
+    factor_set_id?: string | null;
     formula_id?: string | null;
     formula_version?: string | null;
     measurement_method?: string | null;
@@ -101,7 +118,9 @@ export interface APIResponse {
     score_model_id?: string | null;
 }
 
-export const BADGE_CACHE_SCHEMA = 5;
+export const BADGE_CACHE_SCHEMA = 8;
+export const BADGE_VERSION = '2.0.2';
+export const FACTOR_SET_ID_SWDM_V4 = 'swdm-v4-global-494-v1';
 export const FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1 = 'swdm-v4-lite-first-load-v1';
 export const FORMULA_ID_TRANSFER_V2 = 'cometweb_scan_transfer_v2';
 export const SCORE_MODEL_ID_COMETWEB_BANDS_V1 = 'carbon-badge-bands-v1';

@@ -62,7 +62,9 @@ export function createStaticServer(rootDir = process.cwd()) {
       );
       const { file, contentType } = await resolveSafeStaticFile(root, pathname);
       const body = await readFile(file);
-      response.writeHead(200, { 'Content-Type': contentType });
+      const moduleHeaders = isPathInsideRoot(file, resolve(root, 'dist')) && extname(file) === '.js'
+        ? { 'Access-Control-Allow-Origin': '*', 'Timing-Allow-Origin': '*' } : {};
+      response.writeHead(200, { 'Content-Type': contentType, ...moduleHeaders });
       response.end(body);
     } catch {
       response.writeHead(404);

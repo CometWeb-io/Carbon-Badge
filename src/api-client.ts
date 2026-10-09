@@ -1,19 +1,29 @@
+import { canonicalizeBadgeUrl, validateSnapshotId } from './url';
+export { validateSnapshotId } from './url';
+
 export const DEFAULT_API_URL = 'https://app.cometweb.io/api';
 export const DEFAULT_API_ORIGIN = new URL(DEFAULT_API_URL).origin;
 export const API_TIMEOUT_MS = 8000;
 export const MAX_RETRIES = 3;
 export const MAX_RETRY_AFTER_MS = 30_000;
-const SNAPSHOT_ID_PATTERN = /^[a-f0-9]{1,64}$/i;
 
 /** Immutable response envelope shared across concurrent badge instances. */
 export interface HttpEnvelope {
     ok: boolean;
     status: number;
     retryAfter: string | null;
+    cacheControl: string | null;
     bodyText: string;
 }
 
-const inFlightRequests = new Map<string, Promise<HttpEnvelope>>();
+const MAX_RESPONSE_BYTES = 65_536;
+interface Flight {
+    controller: AbortController;
+    promise: Promise<HttpEnvelope>;
+    subscribers: number;
+    finished: boolean;
+}
+const inFlightRequests = new Map<string | symbol, Flight>();
 
 function isLocalhost(hostname: string): boolean {
     return (
@@ -51,19 +61,13 @@ export function buildCarbonBadgeEndpoint(
     canonicalUrl: string,
     badgeOrigin: string,
 ): URL {
+    const subject = canonicalizeBadgeUrl(canonicalUrl);
+    if (!subject) throw new Error('Invalid measurement URL');
     const endpoint = new URL('public/carbon-badge', `${apiBase.href}/`);
-    endpoint.searchParams.set('url', canonicalUrl);
+    endpoint.searchParams.set('url', subject);
     endpoint.searchParams.set('source', 'badge');
     endpoint.searchParams.set('badge_origin', badgeOrigin);
     return endpoint;
-}
-
-export function validateSnapshotId(raw: string): string {
-    const snapshotId = raw.trim().toLowerCase();
-    if (!SNAPSHOT_ID_PATTERN.test(snapshotId)) {
-        throw new Error('Invalid Carbon Badge snapshot ID');
-    }
-    return snapshotId;
 }
 
 export function buildCarbonBadgeSnapshotEndpoint(
@@ -118,42 +122,89 @@ export function calculateRetryDelay(
  * Shares an immutable {@link HttpEnvelope} (body already read), never a
  * one-shot `Response`. Timeout aborts the shared fetch.
  */
-export function fetchSingleFlight(
+export async function fetchSingleFlight(
     key: string,
     init: RequestInit = {},
     timeoutMs = API_TIMEOUT_MS,
 ): Promise<HttpEnvelope> {
-    const existing = inFlightRequests.get(key);
-    if (existing) return existing;
-
-    const request = (async (): Promise<HttpEnvelope> => {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return Promise.reject(new RangeError('Invalid request timeout'));
+    timeoutMs = Math.min(timeoutMs, 30_000);
+    const aborted = () => new DOMException('Measurement aborted', 'AbortError');
+    const { signal, ...options } = init;
+    if (signal?.aborted) return Promise.reject(aborted());
+    const headers = [...new Headers(options.headers).entries()];
+    // Bodies/mutations are deliberately never shared, even if their URL matches.
+    const requestKey = !options.body && (!options.method || options.method.toUpperCase() === 'GET')
+        ? JSON.stringify([key, { ...options, headers }, timeoutMs]) : Symbol();
+    let flight = inFlightRequests.get(requestKey);
+    if (!flight) {
         const controller = new AbortController();
+        let active: Flight;
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-        try {
-            const response = await fetch(key, {
-                ...init,
-                signal: controller.signal,
-            });
-
-            return {
-                ok: response.ok,
-                status: response.status,
+        let failure: unknown;
+        const cancellation = new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(failure ?? aborted()), { once: true }));
+        const request = async (): Promise<HttpEnvelope> => {
+            const response = await fetch(key, { ...options, signal: controller.signal, redirect: 'error' });
+            if (Number(response.headers.get('Content-Length')) > MAX_RESPONSE_BYTES) {
+                throw new RangeError('Measurement response too large');
+            }
+            let bodyText = '';
+            const reader = response.body?.getReader();
+            if (reader) {
+                const decoder = new TextDecoder();
+                let bytes = 0;
+                try {
+                    for (;;) {
+                        const chunk = await reader.read();
+                        if (chunk.done) break;
+                        bytes += chunk.value.byteLength;
+                        if (bytes > MAX_RESPONSE_BYTES) throw new RangeError('Measurement response too large');
+                        bodyText += decoder.decode(chunk.value, { stream: true });
+                    }
+                    bodyText += decoder.decode();
+                } finally { reader.releaseLock(); }
+            } else {
+                bodyText = await response.text();
+                if (new TextEncoder().encode(bodyText).byteLength > MAX_RESPONSE_BYTES) throw new RangeError('Measurement response too large');
+            }
+            return Object.freeze({
+                ok: response.ok, status: response.status,
                 retryAfter: response.headers.get('Retry-After'),
-                bodyText: await response.text(),
-            };
-        } finally {
+                cacheControl: response.headers.get('Cache-Control'), bodyText,
+            });
+        };
+        const promise = Promise.race([request().catch(error => { failure = error; controller.abort(); throw error; }), cancellation]).finally(() => {
             clearTimeout(timeout);
-        }
-    })().finally(() => {
-        inFlightRequests.delete(key);
+            active.finished = true;
+            if (inFlightRequests.get(requestKey) === active) inFlightRequests.delete(requestKey);
+        });
+        active = { controller, promise, subscribers: 0, finished: false };
+        flight = active;
+        inFlightRequests.set(requestKey, active);
+    }
+    const active = flight;
+    active.subscribers++;
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        const release = () => {
+            if (settled) return false;
+            settled = true;
+            signal?.removeEventListener('abort', onAbort);
+            if (--active.subscribers === 0 && !active.finished) {
+                if (inFlightRequests.get(requestKey) === active) inFlightRequests.delete(requestKey);
+                active.controller.abort();
+            }
+            return true;
+        };
+        const onAbort = () => { if (release()) reject(aborted()); };
+        signal?.addEventListener('abort', onAbort, { once: true });
+        if (signal?.aborted) onAbort();
+        active.promise.then(value => { if (release()) resolve(value); }, error => { if (release()) reject(error); });
     });
-
-    inFlightRequests.set(key, request);
-    return request;
 }
 
 /** Test helper — clears the module-level single-flight map. */
 export function clearInFlightRequests(): void {
+    for (const flight of inFlightRequests.values()) flight.controller.abort();
     inFlightRequests.clear();
 }

@@ -32,6 +32,8 @@ jobs:
         run: npm run clean && NODE_ENV=production npm run build
       - name: Bundle size budget
         run: npm run size:check
+      - name: Source and artifact provenance
+        run: NODE_ENV=production npm run sri
       - name: Pack integrity
         run: npm pack --dry-run
       - name: Package consumer smoke

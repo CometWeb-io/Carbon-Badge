@@ -8,6 +8,7 @@ describe('waitForPageQuiescence', () => {
 
     it('resolves quickly when document is already complete', async () => {
         vi.stubGlobal('document', { readyState: 'complete' });
+        vi.stubGlobal('PerformanceObserver', class { observe() {} disconnect() {} });
         const controller = new AbortController();
         await expect(
             waitForPageQuiescence(controller.signal, 10, 200),
@@ -16,6 +17,7 @@ describe('waitForPageQuiescence', () => {
 
     it('rejects when aborted during quiet wait', async () => {
         vi.stubGlobal('document', { readyState: 'complete' });
+        vi.stubGlobal('PerformanceObserver', class { observe() {} disconnect() {} });
         const controller = new AbortController();
         const pending = waitForPageQuiescence(controller.signal, 5_000, 5_000);
         controller.abort();

@@ -1,5 +1,50 @@
 # Changelog
 
+## 2.0.2 — Unreleased
+
+- Remove overlapping numeric-regex repetitions to bound almost-numeric input parsing; omit proof URLs from non-published local cache without mutating fresh network results.
+- Add `/embed` as an ESM side-effect entry with lazy API/cache loading and `/api` as UI-free ESM/CommonJS helpers; keep the root SDK and its named exports compatible.
+- Bound optional module loading to 8 seconds, withhold the grade on chunk failure and stop API/render continuations after cancellation. Native module asset fetches cannot themselves be aborted.
+- Package the complete embed graph; record every JavaScript artifact's hash/SRI and check static-import closure size (10,500 B), complete embed size (15,000 B) and API formats (3,500 B) in CI. Entry SRI does not transitively verify imported chunks.
+- Require the full Resource Timing quiet window; deadline results remain partial and ungraded.
+- Separate network transfer, encoded body and cached body bytes; cache observations withhold the first-load grade.
+- Withhold grades after document/SPA URL changes, preserve API lifecycle diagnostics and reject invalid freshness.
+- Show the measured host/path and warn when a published snapshot belongs to another page, retaining the publication date.
+- Bind release manifests to source/lock digests and reject dirty or mismatched CI provenance.
+- Add PL/EN formatting, minimum 12 px supporting text, forced colors and nonce-based fallback styles; test themes/variants at 200% zoom, RTL, axe and strict CSP.
+- Keep shadow controls reachable by keyboard on WebKit; avoid a forced negative host tabindex and focus the loading status after a retry.
+- Recheck results at expiry, invalidate local grades on SPA URL changes, and defer API/snapshot requests until near the viewport.
+- Isolate shared GETs by options, reference-count subscribers, bound decoded bodies to 65536 bytes and apply the timeout through body reading; reject redirects.
+- Add explicit local KB/KiB, elapsed observation window, packaged factor-set metadata and a provider response schema; migrate badge-owned cache to schema 8 with version/model identity.
+- Preserve the letter band when formatting near thresholds; reject impossible calendar dates and sanitize proof links on every lifecycle path.
+- Generate the release manifest before CI consumer verification and build publication manifests in production mode.
+- Minify only allowlisted private methods/state and remove redundant cache/style checks; preserve public getters, events, CSP and lifecycle semantics.
+- Increase the gzip ceiling from 10,500 to 13,800 B for correctness, localization, accessibility and request/lifecycle safeguards; retain a hard CI limit and zero runtime dependencies.
+- Refresh vulnerable development transitive dependencies; no runtime dependency added.
+
+## [2.0.1] — Hosted CDN artifact; npm unpublished
+
+The ESM artifact is hosted on cometweb.io with SHA-256 `4c33a3a1f0c06deab2be8a44231fb29bf80fec471e8461e8cad727e606a5e540`. The source candidate reconstructs those bytes, but no 2.x npm release or corresponding public source commit exists yet. It remains immutable; 2.0.2 is a separate candidate.
+
+### Breaking
+- Local estimation is the default; `url` alone no longer requests a server scan. Use explicit `mode="api"` only for an intentional service dependency.
+- Remove `allow-query` and `sanitizeAllowedQueryKeys`; query parameters and fragments are always stripped.
+- Replace `BadgeData.verified` and event `verified`/`backendVerified` with `originMatched` (placement only) and event `published` (snapshot provenance). No ownership verification is claimed.
+- Cache schema v7 invalidates API results with the old scan-source alias; local estimates do not read or write localStorage.
+
+### Fixed
+- Published API snapshots and `Cache-Control: no-store` responses bypass local storage, so a later load observes publication revocation.
+- Unrecognized or malformed `measurement_source` now renders N/D instead of silently becoming `api`; absent fields retain the legacy API fallback.
+- `cometweb_scan` remains distinct from `published_snapshot`; live scan results cannot show published attribution or link to a snapshot proof page.
+- Conflicting `snapshot-id` with `mode="api"` or `mode="estimate"` now fails closed; a blank `snapshot-id` no longer falls back to a local estimate.
+- Missing navigation timing, invalid resource sizes and overflow cannot produce a grade.
+- Incomplete estimates retain resource visibility counts and link back to the free tool.
+- Show the measured hostname and improve dark-theme supporting text contrast.
+- Never manufacture a proof URL when the API omits one; published provenance uses “Published by CometWeb”.
+
+### Distribution
+- Free installation does not depend on npm publication or Insight availability. Build and verify the pinned self-hosted artifact before offering installation code.
+
 ## [1.0.9] — 2026-09-23
 
 ### Security
