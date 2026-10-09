@@ -6,11 +6,12 @@ import type { AddressInfo } from 'node:net';
 
 const origin = process.env.BADGE_MARKETING_ORIGIN;
 if (!origin) throw Error('Set BADGE_MARKETING_ORIGIN to the local production-build server');
-const assetPath = '/scripts/carbon-badge/2.0.1/cometweb-carbon-badge.esm.js';
+const release = JSON.parse(readFileSync('dist/release-manifest.json', 'utf8'));
+const assetPath = `/scripts/carbon-badge/${release.version}/cometweb-carbon-badge.esm.js`;
 const esm = readFileSync('dist/cometweb-carbon-badge.esm.js');
 const sri = `sha384-${createHash('sha384').update(esm).digest('base64')}`;
 
-test('production delivery returns exact bytes and cross-origin headers', async ({ request }) => {
+test('versioned delivery returns exact bytes and cross-origin headers', async ({ request }) => {
   const response = await request.get(origin + assetPath);
   expect(response.status()).toBe(200);
   expect(Buffer.from(await response.body()).equals(esm)).toBe(true);
@@ -18,6 +19,7 @@ test('production delivery returns exact bytes and cross-origin headers', async (
   expect(response.headers()['timing-allow-origin']).toBe('*');
   expect(response.headers()['cache-control']).toContain('immutable');
   expect(response.headers()['content-type']).toContain('javascript');
+  expect((await request.get(origin + '/scripts/carbon-badge/99.99.99/cometweb-carbon-badge.esm.js')).status()).toBe(404);
 });
 
 for (const locale of ['', '/pl']) {
@@ -31,6 +33,7 @@ for (const locale of ['', '/pl']) {
     await expect(badge).toBeVisible();
     await page.waitForFunction(() => (document.querySelector('#main-content cometweb-carbon-badge') as any)?.measurementStatus != null);
     await expect(badge).toHaveAttribute('mode', 'estimate');
+    await expect(badge).toHaveAttribute('lang', locale ? 'pl' : 'en');
     await page.locator('.cw-cb-toggles').getByRole('button', { name: 'light', exact: true }).click();
     await page.locator('.cw-cb-toggles').getByRole('button', { name: 'compact', exact: true }).click();
     await expect(badge).toHaveAttribute('theme', 'light');
