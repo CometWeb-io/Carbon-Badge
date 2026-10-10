@@ -31,6 +31,7 @@ import {
 } from './render';
 import { waitForPageQuiescence } from './page-quiescence';
 import type { BadgeLanguage } from './locale';
+import { watchDocumentRoute } from './route-watch';
 
 const DEFAULT_CACHE_TTL = 720; // 12 hours in minutes
 const MAX_CACHE_TTL = 1_440; // 24 hours
@@ -65,11 +66,14 @@ export class CometWebCarbonBadge extends HTMLElementBase {
     private _abort: AbortController | null = null;
     private _scheduleTimer: ReturnType<typeof setTimeout> | null = null;
     private _forceNext = false;
-    private _routeTimer: ReturnType<typeof setInterval> | null = null;
+    private _stopRouteWatch: (() => void) | null = null;
     private _expiryTimer: ReturnType<typeof setTimeout> | null = null;
     private _visibilityObserver: IntersectionObserver | null = null;
     private _visible = false;
     private lastReason = 'Measurement unavailable';
+    private readonly _onPageShow = (event: PageTransitionEvent) => {
+        if (event.persisted) this.reload({ force: true });
+    };
 
     get badgeData(): BadgeData | null {
         return this.data ? cloneBadgeData(this.data) : null;
@@ -176,6 +180,7 @@ export class CometWebCarbonBadge extends HTMLElementBase {
     }
 
     connectedCallback() {
+        window.addEventListener('pageshow', this._onPageShow);
         this.data = null;
         this._visible = false;
         this.renderLoading();
@@ -183,9 +188,11 @@ export class CometWebCarbonBadge extends HTMLElementBase {
     }
 
     disconnectedCallback() {
-        if (this._routeTimer) clearInterval(this._routeTimer);
+        window.removeEventListener('pageshow', this._onPageShow);
+        this._stopRouteWatch?.();
+        this._stopRouteWatch = null;
         if (this._expiryTimer) clearTimeout(this._expiryTimer);
-        this._routeTimer = this._expiryTimer = null;
+        this._expiryTimer = null;
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = null;
         this.abortInFlight();
@@ -235,15 +242,13 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         if (!this.isConnected) return;
 
         const loadId = ++this._loadId;
-        const force = this._forceNext;
-        this._forceNext = false;
         this.effectivePublished = false;
 
         const mode = this.mode;
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = null;
-        if (this._routeTimer) clearInterval(this._routeTimer);
-        this._routeTimer = null;
+        this._stopRouteWatch?.();
+        this._stopRouteWatch = null;
         if (!mode) {
             const rawMode = this.getAttribute('mode')?.trim();
             if (
@@ -278,13 +283,11 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             return;
         }
         if (mode === 'estimate') {
-            let observedUrl = currentPageUrl();
-            // shortcut: 1 s polling can be delayed by background throttling; use reload() for immediate updates.
-            this._routeTimer = setInterval(() => {
-                const nextUrl = currentPageUrl();
-                if (nextUrl !== observedUrl) { observedUrl = nextUrl; this.reload(); }
-            }, 1_000);
+            this._stopRouteWatch = watchDocumentRoute(() => this.reload());
         }
+
+        const force = this._forceNext;
+        this._forceNext = false;
 
         const canonical = this.canonicalTargetUrl;
         if (mode !== 'snapshot' && !canonical) {

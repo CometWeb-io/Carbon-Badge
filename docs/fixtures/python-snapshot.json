@@ -1,0 +1,23 @@
+{
+  "url": "https://example.org/synthetic-contract",
+  "public_id": "fc7aad92b6d4a9aa5d6aa7ab",
+  "status": "ready",
+  "co2_grams": 0.09996,
+  "score": "A+",
+  "grade": "A+",
+  "cleaner_than": null,
+  "page_weight_kb": null,
+  "green_host": null,
+  "eco_badge_eligible": true,
+  "eco_badge_threshold_grams": 0.5,
+  "formula_id": "cometweb_scan_transfer_v2",
+  "formula_version": null,
+  "measurement_source": "published_snapshot",
+  "measurement_method": "cometweb_scan_transfer_v2",
+  "measured_at": "2026-10-10T12:45:05.123456+00:00",
+  "valid_until": "2026-11-09T12:45:05.123456+00:00",
+  "scan_measured_at": "2026-10-10T12:45:05.123456+00:00",
+  "evidence_url": "https://cometweb.io/carbon-badge/fc7aad92b6d4a9aa5d6aa7ab",
+  "cleaner_than_basis": null,
+  "score_model_id": "carbon-badge-bands-v1"
+}

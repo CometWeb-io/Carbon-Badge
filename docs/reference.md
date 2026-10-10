@@ -10,7 +10,7 @@ Self-host the entire `dist/embed/` directory under an immutable version path, re
 
 An embed module load has a separate 8-second deadline before API work begins. Missing, blocked or timed-out chunks render N/D; they never trigger a local-grade fallback. Disconnecting or changing attributes cancels the measurement continuation and retry delay. Native `import()` cannot abort the chunk's asset request; a late module may finish loading but cannot start the cancelled API call or render its grade. The existing 8-second HTTP/body timeout then applies independently per request, with bounded retries.
 
-The release manifest retains its legacy root ESM/UMD fields and adds API formats, the embed graph (static and dynamic imports), initial/optional file lists, and an `artifacts` array with SHA-256, SRI, byte count and gzip byte count for every JavaScript file. **Entry SRI does not verify imported chunks in the browser**; artifact hashes allow release/package verification, not a transitive browser integrity claim. CI totals the full static-import closure for the 10,500 B initial embed budget and all embed modules for the 15,000 B full-network budget. SDK formats each retain 13,800 B limits; API formats each have 3,500 B limits. Sizes are gzip level 9 per file; HTTP headers, JSON responses and uncompressed parsing costs are separate.
+The release manifest retains its legacy root ESM/UMD fields and adds API formats, the embed graph (static and dynamic imports), initial/optional file lists, and an `artifacts` array with SHA-256, SRI, byte count and gzip byte count for every JavaScript file. **Entry SRI does not verify imported chunks in the browser**; artifact hashes allow release/package verification, not a transitive browser integrity claim. CI totals the full static-import closure for the 10,500 B initial embed budget and all embed modules for the 15,000 B full-network budget. SDK formats each retain 14,000 B limits; API formats each have 3,500 B limits. Sizes are gzip level 9 per file; HTTP headers, JSON responses and uncompressed parsing costs are separate.
 
 Build-artifact browser tests cover the split graph, CORS and SRI. `test:e2e:source` skips these cases; it is a development check, not the release gate.
 
@@ -18,7 +18,7 @@ Build-artifact browser tests cover the split graph, CORS and SRI. `test:e2e:sour
 
 | Attribute     | Default                         | Description |
 |---------------|---------------------------------|-------------|
-| `url`         | current page URL                | Page to measure (API mode). Public identity is **origin + pathname** — all query parameters and fragments are always stripped |
+| `url`         | current page URL                | Published page URL to look up (API mode). Public identity is **origin + pathname** — all query parameters and fragments are always stripped |
 | `snapshot-id` | —                               | Published CometWeb public ID; selects snapshot mode when `mode` is omitted |
 | `mode`        | `estimate` or `snapshot` with ID     | `snapshot` — published result; `api` — CometWeb public API; `estimate` — client-side SWDM v4 lite |
 | `variant`     | `default`                       | `default` card, `compact` strip or `minimal` transparent footer. Unknown values use the default card. Changes apply without a new measurement. |
@@ -102,13 +102,13 @@ document.querySelector('cometweb-carbon-badge')
   });
 ```
 
-## First-load observation contract (2.0.2 candidate)
+## First-load observation contract (2.0.3 candidate)
 
 `measurementScope: document-first-load` covers browser-visible navigation and resource entries. It is not a complete user session, a return-visit model or physical energy measurement. `networkTransferBytes` uses `transferSize` only; `encodedBodyBytes` is separate. A zero transfer with a visible encoded body is a cache hit; a transfer smaller than that body is a conditional revalidation. `cachedBodyBytes` reports the body served from cache, never network transfer. Either case withholds the first-load letter (`cache-outside-first-load`).
 
-`networkTransferBytes` is a lower bound when timing is incomplete. `transferUpperBoundBytes` is null when resources are unobservable or history overflowed; counts cannot establish a byte upper bound. Local `pageWeightKiB` uses 1024 bytes and `pageWeightKB` uses 1000. `pageWeightKb` retains its rounded legacy binary value. API `page_weight_kb` remains an opaque legacy unit until the provider contract is confirmed; explicit KB/KiB fields are null for that source.
+`networkTransferBytes` is a lower bound when timing is incomplete. `transferUpperBoundBytes` is always null for local observations. Completed timing entries cannot bound unfinished requests, future lazy loads or a full session, even when all visible entries have known sizes. Local `pageWeightKiB` uses 1024 bytes and `pageWeightKB` uses 1000. `pageWeightKb` retains its rounded legacy binary value. API `page_weight_kb` remains an opaque legacy unit until the provider contract is confirmed; explicit KB/KiB fields are null for that source.
 
-A changed document URL, including a query-only SPA transition, produces `stale` / `document-url-changed`. Changes after initialization include fragments. A late embed compares the navigation entry's URL as well; hash-only routing before initialization cannot be reconstructed. The component does not monkey-patch the host's history API. Local mode checks for URL changes every second; call `reload()` for immediate invalidation. Its next observation withholds a new route grade.
+A changed document URL, including a query-only SPA transition, produces `stale` / `document-url-changed`. Changes after initialization include fragments. A late embed compares the navigation entry's URL as well; hash-only routing before initialization cannot be reconstructed. The component does not monkey-patch the host's history API. Local instances share one timer plus popstate/hashchange listeners. History API changes are checked every second; call `reload()` for immediate invalidation. A persisted pageshow forces a fresh read after browser restoration. Its next observation withholds a new route grade.
 
 A hard quiescence deadline produces `partial` / `quiescence-timeout`. API lifecycle states survive in `badgeData`, `measurementStatus` and the error event with null grams and score. Unknown statuses and mismatched subjects are rejected. Explicit malformed/future/inverted dates withhold the grade; expired results retain `stale`. Legacy non-published API responses may omit dates and cannot gain a publication label. Published snapshots require a complete fresh time window.
 
@@ -116,9 +116,9 @@ Snapshot IDs identify the measured subject independently of the embedding page. 
 
 `allow-query` is ignored in 2.x, including credential-like keys. The same query-free identity applies to local comparison, API request and response, cache keys and public events. Local and snapshot modes never use localStorage; only an explicitly selected API mode may cache a cacheable non-published response.
 
-Release manifests include the source commit, dirty-state flag, source-tree and lockfile digests, build mode, Node version and exact artifact hashes/SRI. A dirty local candidate is not attributable to its base commit alone. CI refuses a dirty or mismatched checkout. Production 2.0.1 remains immutable; 2.0.2 is unpublished until separately released.
+Release manifests include the source commit, dirty-state flag, source-tree and lockfile digests, build mode, Node version and exact artifact hashes/SRI. A dirty local candidate is not attributable to its base commit alone. CI refuses a dirty or mismatched checkout. Historical hosted artifacts remain immutable; each new candidate requires separate registry and installer verification.
 
-The first-load formula is checked against a golden matrix generated independently with `@tgwf/co2@0.19.0`, `new co2({ model: "swd", version: 4 }).perByte(bytes, false)`. The fixture records the npm integrity and explicit scope. It tests calculation parity only; it does not prove browser timing completeness or physical accuracy. Regenerate in a temporary directory with the pinned package, never with an unpinned library default. No oracle library is shipped to visitors.
+The first-load formula is checked against a golden matrix generated independently with `@tgwf/co2@0.19.0`, `new co2({ model: "swd", version: 4 }).perByte(bytes, false)`. The fixture records the npm integrity and explicit scope. It tests calculation parity only; it does not prove browser timing completeness or physical accuracy. Unit tests execute the pinned reference package as a development dependency and compare it with both the golden matrix and the local estimator. No oracle library is shipped to visitors.
 
 ## Model and cache identity
 
@@ -127,3 +127,9 @@ The local factor set is `swdm-v4-global-494-v1`. [model-factors.json](model-fact
 Cache schema 8 includes package version, score-model ID and factor-set ID in its namespace and removes older badge-owned schemas. It never clears unrelated host storage. Non-published cached results omit proof URLs; fresh network results retain their validated URL. Published snapshots bypass storage entirely. Unknown cached sources/statuses/models cannot receive a letter. Network expiry forces a recheck while connected; disconnect cancels timers and subscriptions.
 
 See [api-response.schema.json](api-response.schema.json) for the provider contract. Runtime checks also enforce subject identity, safe URLs, timestamp ordering and current freshness. The schema alone cannot validate those relationships, backend scan policy, revocation propagation or scientific accuracy.
+
+## Public timestamp and URL contract
+
+Timezone-qualified timestamps accept 1–9 fractional digits. Calendar dates, hours and offset minutes are checked before conversion; fractions are truncated to millisecond precision for JavaScript Date. A published result in the future, an inverted time window or an expired result never gains a grade. `docs/fixtures/python-snapshot.json` was generated using the producer serializer with synthetic input and a fixed clock. Consumer tests exercise parsing, normalization and rendering in all three browser engines.
+
+URL identity has a 2048-character limit before and after browser encoding. Credentials, controls and non-HTTP schemes are rejected. All final slashes are removed except the root slash; interior slashes are preserved. Query and fragment data are stripped. The shared producer fixture covers root/default ports, IDNA, IPv6, slash normalization and invalid inputs. It is a bounded compatibility corpus, not proof that every Python/WHATWG URL edge case is equivalent.

@@ -122,7 +122,9 @@ describe('audit P0/P1 regressions', () => {
     it('preserves partial API status in the element and error event', async () => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
             ok: true, status: 200, headers: { get: () => null },
-            text: async () => JSON.stringify({ ...response, status: 'partial', co2_grams: null }),
+            text: async () => JSON.stringify({ ...response, status: 'partial', co2_grams: null,
+                measured_at: new Date(Date.now() - 60_000).toISOString(),
+                valid_until: new Date(Date.now() + 60_000).toISOString() }),
         }));
         const el = document.createElement('cometweb-carbon-badge') as CometWebCarbonBadge;
         el.setAttribute('mode', 'api');

@@ -68,7 +68,9 @@ test('copied hosted snippet executes cross-origin with SRI and no Insight reques
   });
   await new Promise<void>(resolve => visitorServer.listen(0, '127.0.0.1', resolve));
   const visitorOrigin = `http://127.0.0.1:${(visitorServer.address() as AddressInfo).port}`;
-  const context = await page.context().browser()!.newContext();
+  const localTarget = new URL(origin!);
+  const localTls = localTarget.protocol === 'https:' && ['127.0.0.1', 'localhost', '[::1]'].includes(localTarget.hostname);
+  const context = await page.context().browser()!.newContext({ ignoreHTTPSErrors: localTls });
   try {
     const visitor = await context.newPage();
     const apiRequests: string[] = [];

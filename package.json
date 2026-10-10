@@ -1,7 +1,7 @@
 {
     "name": "@cometweb/carbon-badge",
-    "version": "2.0.2",
-    "description": "Lightweight web component badge showing CO₂e emissions per page view — powered by CometWeb & SWDM v4",
+    "version": "2.0.3",
+    "description": "Web component for modelled page-load carbon estimates with explicit timing scope and published snapshots",
     "main": "dist/cometweb-carbon-badge.umd.js",
     "module": "dist/cometweb-carbon-badge.esm.js",
     "types": "dist/index.d.ts",
@@ -27,8 +27,9 @@
         "dist/**/*.d.ts",
         "dist/release-manifest.json",
         "dist/embed/module-graph.json",
-        "docs/reference.md",
+        "docs/*.md",
         "docs/*.json",
+        "docs/fixtures/*.json",
         "docs/media/*.png",
         "docs/media/*.svg",
         "!dist/__tests__",
@@ -69,7 +70,7 @@
     ],
     "author": "Maciej Zmitrukiewicz <hello@cometweb.io>",
     "license": "MIT",
-    "homepage": "https://cometweb.io",
+    "homepage": "https://cometweb.io/carbon-badge",
     "repository": {
         "type": "git",
         "url": "https://github.com/CometWeb-io/Carbon-Badge.git"
@@ -85,6 +86,7 @@
         "@playwright/test": "^1.51.0",
         "@rollup/plugin-terser": "^1.0.0",
         "@rollup/plugin-typescript": "^12.1.0",
+        "@tgwf/co2": "0.19.0",
         "@vitest/coverage-v8": "^5.0.1",
         "happy-dom": "^20.14.5",
         "rollup": "^4.28.0",

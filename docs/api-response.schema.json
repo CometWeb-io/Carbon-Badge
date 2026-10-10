@@ -5,7 +5,7 @@
   "type": "object",
   "required": ["url", "status"],
   "properties": {
-    "url": { "type": "string", "format": "uri", "maxLength": 4096 },
+    "url": { "type": "string", "format": "uri", "maxLength": 2048 },
     "public_id": { "type": "string", "pattern": "^[a-fA-F0-9]{1,64}$" },
     "status": { "enum": ["ready", "ok", "partial", "stale", "revoked", "unknown"] },
     "co2_grams": { "type": ["number", "null"], "minimum": 0 },

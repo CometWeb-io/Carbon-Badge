@@ -24,7 +24,7 @@ const polish: Record<string, string> = {
     'CometWeb Score': 'Ocena CometWeb',
     'first load': 'pierwsze ładowanie',
     'load': 'ładowanie',
-    'First-load SWDM v4 estimate': 'Estymacja pierwszego ładowania SWDM v4',
+    'Observed-transfer SWDM v4 estimate': 'Estymacja zaobserwowanego transferu SWDM v4',
     'Local estimate (partial)': 'Niepełna estymacja lokalna',
     'Estimated page-load footprint': 'Model śladu załadowania strony',
     'Cleaner than ': 'Niższy ślad niż ',

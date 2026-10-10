@@ -58,10 +58,11 @@ export function percentageOrNull(value: unknown): number | null {
 
 /** Require an ISO timestamp with a timezone; do not normalize impossible calendar dates. */
 export function timestampMs(value: string): number {
-    if (!/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return NaN;
+    if (!/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(value)) return NaN;
     const calendar = new Date(value.slice(0, 10) + 'T00:00:00Z');
     if (!Number.isFinite(calendar.getTime()) || calendar.toISOString().slice(0, 10) !== value.slice(0, 10)) return NaN;
-    return Date.parse(value);
+    // JS Date has millisecond precision; normalize before parsing in every engine.
+    return Date.parse(value.replace(/\.(\d+)/, (_, fraction: string) => `.${fraction.slice(0, 3).padEnd(3, '0')}`));
 }
 
 /** Missing legacy API timestamps are allowed; explicit invalid dates never are. */

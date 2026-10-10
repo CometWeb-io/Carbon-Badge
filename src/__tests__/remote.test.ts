@@ -8,6 +8,18 @@ const response = (status: number, length?: string) => ({ ok: status === 200, sta
 beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); resetCleanupFlag(); });
 afterEach(() => { clearInFlightRequests(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+it.each(['api', 'snapshot'] as const)('revalidates the HTTP cache for revocable %s results', async mode => {
+    const fetch = vi.fn(async () => response(404)); vi.stubGlobal('fetch', fetch);
+    await loadRemoteMeasurement({ ...options, mode }, new AbortController().signal, vi.fn());
+    expect(fetch.mock.calls[0]).toEqual([expect.any(String), expect.objectContaining({ cache: 'no-cache' })]);
+});
+
+it('bypasses the HTTP cache on force reload', async () => {
+    const fetch = vi.fn(async () => response(404)); vi.stubGlobal('fetch', fetch);
+    await loadRemoteMeasurement({ ...options, force: true }, new AbortController().signal, vi.fn());
+    expect(fetch.mock.calls[0]).toEqual([expect.any(String), expect.objectContaining({ cache: 'reload' })]);
+});
+
 it('aborts retry backoff on disconnect and does not send another request', async () => {
     const fetch = vi.fn(async () => response(429)); vi.stubGlobal('fetch', fetch);
     const controller = new AbortController();

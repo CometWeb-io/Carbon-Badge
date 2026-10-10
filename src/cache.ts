@@ -17,6 +17,8 @@ const CACHE_INDEX_KEY = 'cometweb:carbon-badge:index';
 const OWNED_LEGACY_PREFIXES = [
     'cometweb:carbon-badge:v7:',
     'cometweb:carbon-badge:v6:',
+    'cometweb:carbon-badge:v5:',
+    'cometweb:carbon-badge:v4:',
     'cometweb:carbon-badge:v3:',
     'cometweb:carbon-badge:v2:',
     'cwb:v3:',

@@ -1,0 +1,46 @@
+name: Marketing release integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BADGE_MARKETING_ORIGIN: ${{ vars.BADGE_MARKETING_ORIGIN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Require an explicitly configured staging origin
+        run: node -e 'const u=new URL(process.env.BADGE_MARKETING_ORIGIN); if(u.protocol!=="https:" || u.origin!==process.env.BADGE_MARKETING_ORIGIN) throw Error("Configure BADGE_MARKETING_ORIGIN as an HTTPS origin")'
+      - run: npm ci
+      - run: npm run clean && NODE_ENV=production npm run build
+      - run: NODE_ENV=production npm run sri
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run test:marketing
+      - name: Record successful exact-source integration
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile, writeFile } from 'node:fs/promises';
+          const manifest = JSON.parse(await readFile('dist/release-manifest.json', 'utf8'));
+          await writeFile('marketing-receipt.json', JSON.stringify({ schema: 1,
+            origin: process.env.BADGE_MARKETING_ORIGIN, version: manifest.version,
+            gitSha: manifest.gitSha, esmSha256: manifest.esm.sha256,
+            sourceDirty: manifest.sourceDirty, testedAt: new Date().toISOString() }, null, 2));
+          JS
+      - run: node scripts/verify-marketing-gate.mjs marketing-receipt.json
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: marketing-integration-${{ github.sha }}
+          path: marketing-receipt.json
+          if-no-files-found: error
+          retention-days: 7
