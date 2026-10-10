@@ -237,6 +237,14 @@ describe('clearExpired', () => {
         expect(getCached(key)).toEqual(mockData);
     });
 
+    it.each(['cometweb:carbon-badge:v4:', 'cometweb:carbon-badge:v5:', 'cometweb:carbon-badge:v6:', 'cometweb:carbon-badge:v7:'])('removes owned obsolete schema %s without touching host storage', prefix => {
+        localStorage.setItem(prefix + 'legacy', 'old payload');
+        localStorage.setItem('host-app-key', 'keep-me');
+        clearExpired();
+        expect(localStorage.getItem(prefix + 'legacy')).toBeNull();
+        expect(localStorage.getItem('host-app-key')).toBe('keep-me');
+    });
+
     it('removes owned legacy v2/v3 keys only', () => {
         localStorage.setItem(
             'cwb:v2:legacy',

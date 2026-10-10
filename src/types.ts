@@ -55,10 +55,11 @@ export interface BadgeData {
     /** Stable diagnostic code; N/D does not erase the measurement lifecycle. */
     reasonCode?: string;
     measurementScope?: 'document-first-load';
-    /** Observed bytes only; unknown transfer has no inferred upper bound. */
+    /** Bytes from completed, visible timing entries; not total session transfer. */
     networkTransferBytes?: number;
     encodedBodyBytes?: number;
     cachedBodyBytes?: number;
+    /** Always null for local observations: unfinished/lazy requests are invisible. */
     transferUpperBoundBytes?: number | null;
     /** True when local estimate is partial or unavailable. */
     estimatePartial?: boolean;
@@ -119,7 +120,7 @@ export interface APIResponse {
 }
 
 export const BADGE_CACHE_SCHEMA = 8;
-export const BADGE_VERSION = '2.0.2';
+export const BADGE_VERSION = '2.0.3';
 export const FACTOR_SET_ID_SWDM_V4 = 'swdm-v4-global-494-v1';
 export const FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1 = 'swdm-v4-lite-first-load-v1';
 export const FORMULA_ID_TRANSFER_V2 = 'cometweb_scan_transfer_v2';

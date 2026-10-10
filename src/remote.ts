@@ -61,7 +61,7 @@ export async function loadRemoteMeasurement(
         let retryLabel = 'Retrying…';
         try {
             const response = await fetchSingleFlight(endpoint.toString(), {
-                signal, headers: { Accept: 'application/json' }, cache: mode === 'snapshot' ? 'no-cache' : 'default',
+                signal, headers: { Accept: 'application/json' }, cache: force ? 'reload' : 'no-cache',
             }, API_TIMEOUT_MS);
             if (signal.aborted) throw new DOMException('Measurement aborted', 'AbortError');
             if (!response.ok) {

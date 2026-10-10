@@ -1,14 +1,14 @@
 /** Public page identity never contains credentials, query parameters or a fragment. */
 export function canonicalizeBadgeUrl(raw: string): string | null {
     try {
-        if (typeof raw !== 'string' || raw.length > 4_096) return null;
+        if (typeof raw !== 'string' || raw.length > 2_048 || /[\x00-\x20\x7f]/.test(raw)) return null;
         const url = new URL((raw || '').trim());
         if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
         url.search = '';
         url.hash = '';
-        if (url.pathname.length > 1 && url.pathname.endsWith('/')) url.pathname = url.pathname.slice(0, -1);
+        url.pathname = url.pathname.replace(/\/+$/, '') || '/';
         const canonical = url.toString();
-        return canonical.length <= 4_096 ? canonical : null;
+        return canonical.length <= 2_048 ? canonical : null;
     } catch {
         return null;
     }

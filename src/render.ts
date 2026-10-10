@@ -33,7 +33,7 @@ export interface RenderTrust {
 
 function formatMeasuredDate(value: string | null, locale: BadgeLanguage): string | null {
     if (!value) return null;
-    const date = new Date(value);
+    const date = new Date(timestampMs(value));
     if (!Number.isFinite(date.getTime())) return null;
     try {
         return new Intl.DateTimeFormat(locale, {
@@ -145,7 +145,7 @@ function subtitleFor(data: BadgeData, published: boolean, language: BadgeLanguag
         return {
             text: data.estimatePartial
                 ? 'Local estimate (partial)'
-                : 'First-load SWDM v4 estimate',
+                : 'Observed-transfer SWDM v4 estimate',
         };
     }
     return { text: 'Estimated page-load footprint' };

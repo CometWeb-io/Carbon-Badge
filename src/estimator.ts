@@ -168,7 +168,8 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
         networkTransferBytes: pageWeightBytes,
         encodedBodyBytes: measured.encodedBodyBytes,
         cachedBodyBytes: measured.cachedBodyBytes,
-        transferUpperBoundBytes: partial ? null : pageWeightBytes,
+        // Timing entries cannot bound unfinished or later lazy transfers.
+        transferUpperBoundBytes: null,
         estimatePartial: partial || totalCo2 === null,
         measuredResourceCount: measured.measuredResourceCount,
         unknownResourceCount: measured.unknownResourceCount,
