@@ -155,10 +155,10 @@ function subtitleFor(data: BadgeData, published: boolean, language: BadgeLanguag
 }
 
 export function measurementReason(data: BadgeData | null): string {
-    if (data?.reasonCode === 'document-url-changed') return 'URL changed. Reload this page for a new observation.';
+    if (data?.reasonCode === 'document-url-changed') return 'URL changed. Reload this page.';
     if (data?.reasonCode === 'timing-buffer-overflow') return 'Timing history truncated. Reload this page.';
     if (data?.reasonCode === 'unobservable-resource') return 'Hidden sizes. Enable Timing-Allow-Origin or use Light.';
-    if (data?.reasonCode === 'timing-unavailable') return 'No usable browser timing. Use Light.';
+    if (data?.reasonCode === 'timing-unavailable') return 'No timing data. Use Light.';
     if (data?.status === 'revoked') return 'Measurement revoked';
     if (data?.status === 'stale') return 'Stale measurement — refresh required';
     return data?.status === 'partial' ? 'Partial measurement — grade withheld' : 'No usable measurement';

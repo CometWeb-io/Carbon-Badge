@@ -27,6 +27,7 @@ const BYTES_PER_GB = 1_000_000_000;
 
 let resourceTimingBufferOverflowed = false;
 let resourceTimingInitialized = false;
+let resourceTimingUnavailable = false;
 let initialDocumentUrl: string | null = null;
 
 /**
@@ -39,7 +40,7 @@ export function initializeResourceTiming(): void {
     initialDocumentUrl = typeof location !== 'undefined' ? location.href : null;
 
     if (typeof performance === 'undefined') {
-        resourceTimingBufferOverflowed = true;
+        resourceTimingUnavailable = true;
         return;
     }
 
@@ -56,7 +57,7 @@ export function initializeResourceTiming(): void {
             });
         }
     } catch {
-        resourceTimingBufferOverflowed = true;
+        resourceTimingUnavailable = true;
     }
 }
 
@@ -65,6 +66,7 @@ export function resetResourceTimingGuard(): void {
     resourceTimingBufferOverflowed = false;
     resourceTimingInitialized = false;
     initialDocumentUrl = null;
+    resourceTimingUnavailable = false;
 }
 
 export interface EstimateResult {
@@ -101,7 +103,7 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
     if (measured.navigationUrl && href) {
         documentUrlChanged ||= documentIdentity(measured.navigationUrl) !== documentIdentity(href);
     }
-    const partial = measured.partial || resourceTimingBufferOverflowed || documentUrlChanged;
+    const partial = measured.partial || resourceTimingUnavailable || resourceTimingBufferOverflowed || documentUrlChanged;
     const pageWeightKb = pageWeightBytes > 0 ? pageWeightBytes / 1024 : null;
     const dataTransferGb = pageWeightBytes / BYTES_PER_GB;
 
@@ -161,7 +163,8 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
         measuredAt: totalCo2 === null ? null : new Date().toISOString(),
         validUntil: null,
         evidenceUrl: null,
-        reasonCode: documentUrlChanged ? 'document-url-changed'
+        reasonCode: resourceTimingUnavailable ? 'timing-unavailable'
+            : documentUrlChanged ? 'document-url-changed'
             : resourceTimingBufferOverflowed ? 'timing-buffer-overflow'
             : measured.unknownResourceCount > 0 ? 'unobservable-resource'
             : totalCo2 === null ? 'timing-unavailable' : undefined,
@@ -282,9 +285,7 @@ function measurePageWeight(): WeightMeasure {
             };
         }
     } catch {
-        console.warn(
-            '[CometWeb Carbon Badge] Resource Timing unavailable.',
-        );
+        // The unavailable result carries the actionable diagnostic into the UI.
     }
 
     return unavailable();

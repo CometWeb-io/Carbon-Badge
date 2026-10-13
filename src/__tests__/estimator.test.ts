@@ -191,18 +191,17 @@ describe('estimateCO2', () => {
         expect(result.coverageRatio).toBe(0.5);
     });
 
-    it('logs a warning when Performance API throws', () => {
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('returns an actionable unavailable result when Performance API throws', () => {
         vi.stubGlobal('performance', {
             getEntriesByType: () => {
                 throw new Error('not supported');
             },
         });
 
-        estimateCO2(false);
-        expect(warnSpy).toHaveBeenCalledWith(
-            expect.stringContaining('Resource Timing unavailable'),
-        );
+        const result = estimateCO2(false);
+        expect(result.co2Grams).toBeNull();
+        expect(result.score).toBeNull();
+        expect(result.reasonCode).toBe('timing-unavailable');
     });
 });
 
