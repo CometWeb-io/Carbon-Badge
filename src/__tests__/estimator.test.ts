@@ -201,7 +201,7 @@ describe('estimateCO2', () => {
 
         estimateCO2(false);
         expect(warnSpy).toHaveBeenCalledWith(
-            expect.stringContaining('Performance Resource Timing API unavailable'),
+            expect.stringContaining('Resource Timing unavailable'),
         );
     });
 });

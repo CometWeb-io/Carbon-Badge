@@ -54,7 +54,9 @@ export interface BadgeData {
     evidenceUrl: string | null;
     /** Stable diagnostic code; N/D does not erase the measurement lifecycle. */
     reasonCode?: string;
-    measurementScope?: 'document-first-load';
+    measurementScope?: 'document-first-load' | 'document-observed-resource-sizes';
+    /** Formula input: observed transfer or known resource sizes, depending on scope. */
+    modelledResourceBytes?: number;
     /** Bytes from completed, visible timing entries; not total session transfer. */
     networkTransferBytes?: number;
     encodedBodyBytes?: number;
@@ -120,8 +122,10 @@ export interface APIResponse {
 }
 
 export const BADGE_CACHE_SCHEMA = 8;
-export const BADGE_VERSION = '2.0.3';
+export const BADGE_VERSION = '2.0.4';
 export const FACTOR_SET_ID_SWDM_V4 = 'swdm-v4-global-494-v1';
 export const FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1 = 'swdm-v4-lite-first-load-v1';
 export const FORMULA_ID_TRANSFER_V2 = 'cometweb_scan_transfer_v2';
 export const SCORE_MODEL_ID_COMETWEB_BANDS_V1 = 'carbon-badge-bands-v1';
+
+export const FORMULA_ID_SWDM_V4_LITE_RESOURCE_SIZES_V1 = 'swdm-v4-lite-resource-sizes-v1';

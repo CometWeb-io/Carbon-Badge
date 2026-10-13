@@ -11,6 +11,7 @@ import { canonicalizeBadgeUrl } from './url';
 import {
     FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1,
     FACTOR_SET_ID_SWDM_V4,
+    FORMULA_ID_SWDM_V4_LITE_RESOURCE_SIZES_V1,
     SCORE_MODEL_ID_COMETWEB_BANDS_V1,
 } from './types';
 
@@ -90,16 +91,17 @@ export function estimateCO2(greenHost: boolean = false): BadgeData {
 export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult {
     initializeResourceTiming();
     const measured = measurePageWeight();
-    const pageWeightBytes = measured.bytes;
+    const resourceSizeModel = measured.hasCachedEntries;
+    const pageWeightBytes = resourceSizeModel ? measured.resourceSizeBytes : measured.bytes;
     const href = typeof location !== 'undefined' ? location.href : '';
-    let documentUrlChanged = Boolean(initialDocumentUrl && href !== initialDocumentUrl);
+    const documentIdentity = (url: string): string => {
+        try { const parsed = new URL(url); parsed.hash = ''; return parsed.href; } catch { return url; }
+    };
+    let documentUrlChanged = Boolean(initialDocumentUrl && documentIdentity(href) !== documentIdentity(initialDocumentUrl));
     if (measured.navigationUrl && href) {
-        const original = new URL(measured.navigationUrl);
-        const current = new URL(href);
-        original.hash = current.hash = '';
-        documentUrlChanged ||= original.href !== current.href;
+        documentUrlChanged ||= documentIdentity(measured.navigationUrl) !== documentIdentity(href);
     }
-    const partial = measured.partial || resourceTimingBufferOverflowed || documentUrlChanged || measured.cachedBodyBytes > 0;
+    const partial = measured.partial || resourceTimingBufferOverflowed || documentUrlChanged;
     const pageWeightKb = pageWeightBytes > 0 ? pageWeightBytes / 1024 : null;
     const dataTransferGb = pageWeightBytes / BYTES_PER_GB;
 
@@ -151,21 +153,21 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
                 : 'ready',
         source: 'estimate',
         formulaId:
-            totalCo2 === null ? null : FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1,
+            totalCo2 === null ? null : resourceSizeModel ? FORMULA_ID_SWDM_V4_LITE_RESOURCE_SIZES_V1 : FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1,
         scoreModelId:
             totalCo2 === null ? null : SCORE_MODEL_ID_COMETWEB_BANDS_V1,
         measurementMethod:
-            totalCo2 === null ? null : 'resource_timing_lite',
+            totalCo2 === null ? null : resourceSizeModel ? 'resource_timing_resource_sizes' : 'resource_timing_lite',
         measuredAt: totalCo2 === null ? null : new Date().toISOString(),
         validUntil: null,
         evidenceUrl: null,
         reasonCode: documentUrlChanged ? 'document-url-changed'
             : resourceTimingBufferOverflowed ? 'timing-buffer-overflow'
             : measured.unknownResourceCount > 0 ? 'unobservable-resource'
-            : measured.cachedBodyBytes > 0 ? 'cache-outside-first-load'
             : totalCo2 === null ? 'timing-unavailable' : undefined,
-        measurementScope: 'document-first-load',
-        networkTransferBytes: pageWeightBytes,
+        measurementScope: resourceSizeModel ? 'document-observed-resource-sizes' : 'document-first-load',
+        networkTransferBytes: measured.bytes,
+        modelledResourceBytes: pageWeightBytes,
         encodedBodyBytes: measured.encodedBodyBytes,
         cachedBodyBytes: measured.cachedBodyBytes,
         // Timing entries cannot bound unfinished or later lazy transfers.
@@ -191,6 +193,8 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
 interface WeightMeasure {
     navigationUrl?: string;
     bytes: number;
+    resourceSizeBytes: number;
+    hasCachedEntries: boolean;
     encodedBodyBytes: number;
     cachedBodyBytes: number;
     partial: boolean;
@@ -206,6 +210,8 @@ interface WeightMeasure {
 function measurePageWeight(): WeightMeasure {
     const unavailable = (): WeightMeasure => ({
         bytes: 0,
+        resourceSizeBytes: 0,
+        hasCachedEntries: false,
         encodedBodyBytes: 0,
         cachedBodyBytes: 0,
         partial: true,
@@ -230,20 +236,27 @@ function measurePageWeight(): WeightMeasure {
         ) as PerformanceNavigationTiming[];
 
         let total = 0;
+        let resourceSizeBytes = 0;
         let encodedBodyBytes = 0;
         let cachedBodyBytes = 0;
         let measuredResourceCount = 0;
         let unknownResourceCount = navigation.length === 0 ? 1 : 0;
         const entries = [...navigation.slice(0, 1), ...resources];
+        const cachedEntry = (entry: PerformanceResourceTiming & { deliveryType?: string }) => entry.deliveryType === 'cache' ||
+            entry.encodedBodySize > 0 && (entry.transferSize < entry.encodedBodySize || entry.transferSize === 300);
+        const hasCachedEntries = entries.some(cachedEntry);
 
         for (const entry of entries) {
             const bytes = entry.transferSize;
             const encoded = entry.encodedBodySize;
-            if (Number.isFinite(bytes) && bytes >= 0 && (bytes > 0 || Number.isFinite(encoded) && encoded > 0)) {
+            if (Number.isFinite(bytes) && bytes >= 0 && (encoded === undefined && !hasCachedEntries || Number.isFinite(encoded) && encoded >= 0) && (bytes > 0 || Number.isFinite(encoded) && encoded > 0)) {
                 total += bytes;
+                // Keep reported transfer sizes separate. Cached bodies contribute their
+                // known encoded size; headers that were never observed are not guessed.
+                resourceSizeBytes += Math.max(bytes, Number.isFinite(encoded) && encoded >= 0 ? encoded : 0);
                 if (Number.isFinite(encoded) && encoded >= 0) {
                     encodedBodyBytes += encoded;
-                    if (bytes < encoded) cachedBodyBytes += encoded;
+                    if (cachedEntry(entry)) cachedBodyBytes += encoded;
                 }
                 measuredResourceCount++;
             } else {
@@ -251,11 +264,13 @@ function measurePageWeight(): WeightMeasure {
             }
         }
 
-        if (Number.isFinite(total) && Number.isFinite(encodedBodyBytes) && measuredResourceCount > 0) {
+        if (Number.isFinite(total) && Number.isFinite(encodedBodyBytes) && Number.isFinite(resourceSizeBytes) && measuredResourceCount > 0) {
             const entryCount = measuredResourceCount + unknownResourceCount;
             return {
                 navigationUrl: navigation[0]?.name,
                 bytes: total,
+                resourceSizeBytes,
+                hasCachedEntries,
                 encodedBodyBytes,
                 cachedBodyBytes,
                 partial:
@@ -268,7 +283,7 @@ function measurePageWeight(): WeightMeasure {
         }
     } catch {
         console.warn(
-            '[CometWeb Carbon Badge] Performance Resource Timing API unavailable.',
+            '[CometWeb Carbon Badge] Resource Timing unavailable.',
         );
     }
 

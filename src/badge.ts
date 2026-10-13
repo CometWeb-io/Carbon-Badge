@@ -57,11 +57,11 @@ const HTMLElementBase: typeof HTMLElement =
         : HTMLElement;
 
 export class CometWebCarbonBadge extends HTMLElementBase {
-    private shadow: ShadowRoot;
-    private data: BadgeData | null = null;
-    private effectivePublished = false;
-    private measurementSource: MeasurementSource = 'api';
-    private retrievalSource: RetrievalSource = 'network';
+    private _shadow: ShadowRoot;
+    private _data: BadgeData | null = null;
+    private _effectivePublished = false;
+    private _measurementSource: MeasurementSource = 'api';
+    private _retrievalSource: RetrievalSource = 'network';
     private _loadId = 0;
     private _abort: AbortController | null = null;
     private _scheduleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -70,34 +70,34 @@ export class CometWebCarbonBadge extends HTMLElementBase {
     private _expiryTimer: ReturnType<typeof setTimeout> | null = null;
     private _visibilityObserver: IntersectionObserver | null = null;
     private _visible = false;
-    private lastReason = 'Measurement unavailable';
+    private _lastReason = 'Measurement unavailable';
     private readonly _onPageShow = (event: PageTransitionEvent) => {
         if (event.persisted) this.reload({ force: true });
     };
 
     get badgeData(): BadgeData | null {
-        return this.data ? cloneBadgeData(this.data) : null;
+        return this._data ? cloneBadgeData(this._data) : null;
     }
     get co2Grams(): number | null {
-        return this.data?.co2Grams ?? null;
+        return this._data?.co2Grams ?? null;
     }
     get score(): ScoreLetter | null {
-        return this.data?.score ?? null;
+        return this._data?.score ?? null;
     }
     get cleanerThan(): number | null {
-        return this.data?.cleanerThan ?? null;
+        return this._data?.cleanerThan ?? null;
     }
     get pageWeightKb(): number | null {
-        return this.data?.pageWeightKb ?? null;
+        return this._data?.pageWeightKb ?? null;
     }
-    get pageWeightKiB(): number | null { return this.data?.pageWeightKiB ?? null; }
-    get pageWeightKB(): number | null { return this.data?.pageWeightKB ?? null; }
+    get pageWeightKiB(): number | null { return this._data?.pageWeightKiB ?? null; }
+    get pageWeightKB(): number | null { return this._data?.pageWeightKB ?? null; }
     get measurementStatus(): BadgeData['status'] | null {
-        return this.data?.status ?? null;
+        return this._data?.status ?? null;
     }
 
     reload(options?: { force?: boolean }): void {
-        this.data = null;
+        this._data = null;
         this._forceNext = options?.force === true;
         this._loadId++;
         if (this._expiryTimer) clearTimeout(this._expiryTimer);
@@ -122,28 +122,28 @@ export class CometWebCarbonBadge extends HTMLElementBase {
 
     constructor() {
         super();
-        this.shadow = this.attachShadow({ mode: 'open' });
+        this._shadow = this.attachShadow({ mode: 'open' });
         try {
-            this.shadow.adoptedStyleSheets = [getStyleSheet(this.theme)];
+            this._shadow.adoptedStyleSheets = [getStyleSheet(this._theme)];
         } catch {
             /* SSR / no Constructable Stylesheets */
         }
     }
 
-    private get rawTargetUrl(): string {
+    private get _rawTargetUrl(): string {
         return this.getAttribute('url') || currentPageUrl();
     }
 
-    private get snapshotId(): string | null {
+    private get _snapshotId(): string | null {
         const value = this.getAttribute('snapshot-id')?.trim();
         return value || null;
     }
 
-    private get canonicalTargetUrl(): string | null {
-        return canonicalizeBadgeUrl(this.rawTargetUrl);
+    private get _canonicalTargetUrl(): string | null {
+        return canonicalizeBadgeUrl(this._rawTargetUrl);
     }
 
-    private get mode(): BadgeMode | null {
+    private get _mode(): BadgeMode | null {
         const raw = this.getAttribute('mode')?.trim();
         if (!raw) {
             return this.hasAttribute('snapshot-id') ? 'snapshot' : 'estimate';
@@ -158,16 +158,16 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         return raw;
     }
 
-    private get theme(): BadgeTheme {
+    private get _theme(): BadgeTheme {
         const t = this.getAttribute('theme') as BadgeTheme;
         return ALLOWED_THEMES.has(t) ? t : 'dark';
     }
-    private get language(): BadgeLanguage {
+    private get _language(): BadgeLanguage {
         const language = this.closest('[lang]')?.getAttribute('lang') || document.documentElement.lang || navigator.language;
         return language.toLowerCase().startsWith('pl') ? 'pl' : 'en';
     }
 
-    private get cacheTtl(): number {
+    private get _cacheTtl(): number {
         const raw = this.getAttribute('cache-ttl');
         if (raw === null) return DEFAULT_CACHE_TTL;
         const value = Number(raw);
@@ -175,13 +175,13 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         return Math.min(value, MAX_CACHE_TTL);
     }
 
-    private get greenHost(): boolean {
+    private get _greenHost(): boolean {
         return this.getAttribute('green-host') === 'true';
     }
 
     connectedCallback() {
         window.addEventListener('pageshow', this._onPageShow);
-        this.data = null;
+        this._data = null;
         this._visible = false;
         this.renderLoading();
         this.scheduleLoad();
@@ -215,9 +215,9 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         }
         if (name === 'nonce') { this.updateStyles(); return; }
         if (name === 'lang') {
-            if (!this.data) this.renderLoading();
-            else if (this.data.status === 'ready') this.renderBadge();
-            else this.renderUnknown(this.lastReason, this.data);
+            if (!this._data) this.renderLoading();
+            else if (this._data.status === 'ready') this.renderBadge();
+            else this.renderUnknown(this._lastReason, this._data);
             return;
         }
         this.reload({ force: name === 'cache-ttl' });
@@ -242,9 +242,9 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         if (!this.isConnected) return;
 
         const loadId = ++this._loadId;
-        this.effectivePublished = false;
+        this._effectivePublished = false;
 
-        const mode = this.mode;
+        const mode = this._mode;
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = null;
         this._stopRouteWatch?.();
@@ -266,7 +266,7 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             return;
         }
 
-        if (mode === 'snapshot' && !this.snapshotId) {
+        if (mode === 'snapshot' && !this._snapshotId) {
             this.renderUnknown('Missing snapshot ID');
             return;
         }
@@ -289,7 +289,7 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         const force = this._forceNext;
         this._forceNext = false;
 
-        const canonical = this.canonicalTargetUrl;
+        const canonical = this._canonicalTargetUrl;
         if (mode !== 'snapshot' && !canonical) {
             this.renderUnknown('Invalid or missing URL');
             return;
@@ -297,7 +297,7 @@ export class CometWebCarbonBadge extends HTMLElementBase {
 
         if (mode === 'snapshot') {
             try {
-                validateSnapshotId(this.snapshotId || '');
+                validateSnapshotId(this._snapshotId || '');
             } catch {
                 this.renderUnknown('Invalid snapshot ID');
                 return;
@@ -332,17 +332,17 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             const { loadRemoteMeasurement } = runtime;
             if (controller.signal.aborted || loadId !== this._loadId || !this.isConnected) return;
             const result = await loadRemoteMeasurement({
-                canonicalUrl: canonical || '', snapshotId: this.snapshotId, mode,
-                cacheTtl: this.cacheTtl, greenHost: this.greenHost, force,
+                canonicalUrl: canonical || '', snapshotId: this._snapshotId, mode,
+                cacheTtl: this._cacheTtl, greenHost: this._greenHost, force,
                 badgeOrigin: typeof location === 'undefined' ? '' : location.origin,
             }, controller.signal, label => {
                 if (loadId === this._loadId && this.isConnected) this.renderLoading(label);
             });
             if (controller.signal.aborted || loadId !== this._loadId || !this.isConnected) return;
             if ('reason' in result) { this.renderUnknown(result.reason); return; }
-            this.data = result.data;
-            this.measurementSource = result.data.source || 'api';
-            this.retrievalSource = result.retrievalSource;
+            this._data = result.data;
+            this._measurementSource = result.data.source || 'api';
+            this._retrievalSource = result.retrievalSource;
             this.renderBadge();
         } catch {
             if (!controller.signal.aborted && loadId === this._loadId && this.isConnected) this.renderUnknown('Unable to load measurement');
@@ -366,18 +366,18 @@ export class CometWebCarbonBadge extends HTMLElementBase {
         this.abortInFlight();
         const controller = new AbortController();
         this._abort = controller;
-        this.measurementSource = 'estimate';
-        this.retrievalSource = 'local';
+        this._measurementSource = 'estimate';
+        this._retrievalSource = 'local';
 
         try {
             await waitForPageQuiescence(controller.signal);
             if (loadId !== this._loadId || !this.isConnected) return;
 
-            const { data } = estimateCO2Detailed(this.greenHost);
+            const { data } = estimateCO2Detailed(this._greenHost);
             data.url = canonical;
-            this.data = data;
-            this.measurementSource = 'estimate';
-            this.retrievalSource = 'local';
+            this._data = data;
+            this._measurementSource = 'estimate';
+            this._retrievalSource = 'local';
             if (data.co2Grams === null) {
                 this.renderUnknown(
                     measurementReason(data),
@@ -391,7 +391,7 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             const isAbort =
                 error instanceof DOMException && error.name === 'AbortError';
             if (!isAbort) {
-                const { data } = estimateCO2Detailed(this.greenHost);
+                const { data } = estimateCO2Detailed(this._greenHost);
                 this.renderUnknown('Page did not become quiet; grade withheld', { ...data, co2Grams: null, score: null, cleanerThan: null, status: 'partial', reasonCode: 'quiescence-timeout', transferUpperBoundBytes: null, estimatePartial: true });
             }
         } finally {
@@ -400,45 +400,21 @@ export class CometWebCarbonBadge extends HTMLElementBase {
     }
 
     private dispatchBadgeEvent() {
-        if (!this.data) return;
-        const d = cloneBadgeData(this.data);
+        if (!this._data) return;
+        const d = cloneBadgeData(this._data);
         this.dispatchEvent(
             new CustomEvent('cometweb:badge-load', {
                 bubbles: true,
                 composed: true,
                 detail: {
-                    url: d.url,
-                    co2Grams: d.co2Grams,
-                    score: d.score,
-                    cleanerThan: d.cleanerThan,
-                    pageWeightKb: d.pageWeightKb,
-                    greenHost: d.greenHost,
-                    source: this.measurementSource,
-                    measurementSource: this.measurementSource,
-                    retrievalSource: this.retrievalSource,
-                    status: d.status,
-                    formulaId: d.formulaId,
-                    scoreModelId: d.scoreModelId,
-                    measuredAt: d.measuredAt,
-                    published: this.effectivePublished,
-                    originMatched: this.retrievalSource === 'network' ? d.originMatched : null,
-                    measuredResourceCount: d.measuredResourceCount,
-                    pageWeightKB: d.pageWeightKB,
-                    pageWeightKiB: d.pageWeightKiB,
-                    factorSetId: d.factorSetId,
-                    measurementWindowStartMs: d.measurementWindowStartMs,
-                    measurementWindowEndMs: d.measurementWindowEndMs,
-                    unknownResourceCount: d.unknownResourceCount,
-                    observableResourceRatio: d.observableResourceRatio,
-                    coverageRatio: d.coverageRatio,
-                    reasonCode: d.reasonCode,
-                    measurementScope: d.measurementScope,
-                    networkTransferBytes: d.networkTransferBytes,
-                    encodedBodyBytes: d.encodedBodyBytes,
-                    cachedBodyBytes: d.cachedBodyBytes,
-                    transferUpperBoundBytes: d.transferUpperBoundBytes,
-                    mode: this.mode,
-                    publicId: d.publicId,
+                    ...d,
+                    source: this._measurementSource,
+                    measurementSource: this._measurementSource,
+                    retrievalSource: this._retrievalSource,
+                    published: this._effectivePublished,
+                    originMatched: this._retrievalSource === 'network' ? d.originMatched : null,
+                    mode: this._mode,
+
                 },
             }),
         );
@@ -446,37 +422,37 @@ export class CometWebCarbonBadge extends HTMLElementBase {
 
     private updateStyles(): void {
         const supportsSheets =
-            'adoptedStyleSheets' in this.shadow &&
+            'adoptedStyleSheets' in this._shadow &&
             typeof CSSStyleSheet !== 'undefined' &&
             'replaceSync' in CSSStyleSheet.prototype;
 
         if (supportsSheets) {
             try {
-                this.shadow.adoptedStyleSheets = [getStyleSheet(this.theme)];
-                this.shadow.querySelector('style[data-cw-theme]')?.remove();
+                this._shadow.adoptedStyleSheets = [getStyleSheet(this._theme)];
+                this._shadow.querySelector('style[data-cw-theme]')?.remove();
                 return;
             } catch { /* Fall back to the host-provided style nonce. */ }
         }
 
-        let style = this.shadow.querySelector<HTMLStyleElement>(
+        let style = this._shadow.querySelector<HTMLStyleElement>(
             'style[data-cw-theme]',
         );
         if (!style) {
             style = document.createElement('style');
             style.dataset.cwTheme = '';
-            this.shadow.prepend(style);
+            this._shadow.prepend(style);
         }
         style.nonce = this.nonce;
-        style.textContent = getStyles(this.theme);
+        style.textContent = getStyles(this._theme);
     }
 
     private renderLoading(label = 'Calculating carbon footprint\u2026') {
         this.updateStyles();
-        mountLoading(this.shadow, label, { keepStyles: true, language: this.language });
+        mountLoading(this._shadow, label, { keepStyles: true, language: this._language });
     }
 
     private renderBadge() {
-        const normalized = normalizeBadgeData(this.data);
+        const normalized = normalizeBadgeData(this._data);
         if (
             !normalized ||
             normalized.co2Grams === null ||
@@ -490,16 +466,16 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             );
             return;
         }
-        this.data = normalized;
+        this._data = normalized;
         this.updateStyles();
-        const model = mountBadge(this.shadow, normalized, this.theme, {
+        const model = mountBadge(this._shadow, normalized, this._theme, {
             keepStyles: true,
-            language: this.language,
+            language: this._language,
             trust: {
-                allowPublished: this.retrievalSource === 'network',
+                allowPublished: this._retrievalSource === 'network',
             },
         });
-        this.effectivePublished = model.published;
+        this._effectivePublished = model.published;
         if (this._expiryTimer) clearTimeout(this._expiryTimer);
         const expires = normalized.validUntil ? Date.parse(normalized.validUntil) : NaN;
         if (Number.isFinite(expires)) this._expiryTimer = setTimeout(() => {
@@ -509,11 +485,11 @@ export class CometWebCarbonBadge extends HTMLElementBase {
     }
 
     private renderUnknown(reason: string, measurement?: BadgeData) {
-        this.lastReason = reason;
+        this._lastReason = reason;
         if (this._expiryTimer) clearTimeout(this._expiryTimer);
-        this.effectivePublished = false;
-        this.data = measurement ?? {
-            url: this.canonicalTargetUrl || '',
+        this._effectivePublished = false;
+        this._data = measurement ?? {
+            url: this._canonicalTargetUrl || '',
             publicId: null,
             co2Grams: null,
             score: null,
@@ -532,31 +508,32 @@ export class CometWebCarbonBadge extends HTMLElementBase {
             evidenceUrl: null,
         };
         this.updateStyles();
-        mountUnknown(this.shadow, reason, { keepStyles: true, data: this.data, language: this.language });
+        mountUnknown(this._shadow, reason, { keepStyles: true, data: this._data, language: this._language });
         this.dispatchEvent(
             new CustomEvent('cometweb:badge-error', {
                 bubbles: true,
                 composed: true,
                 detail: {
-                    url: this.data.url,
-                    mode: this.mode,
+                    url: this._data.url,
+                    mode: this._mode,
                     reason,
-                    reasonCode: this.data.reasonCode,
-                    status: this.data.status,
-                    measurementSource: this.data.source,
-                    retrievalSource: this.data.source ? this.retrievalSource : null,
-                    factorSetId: this.data.factorSetId,
-                    measurementWindowStartMs: this.data.measurementWindowStartMs,
-                    measurementWindowEndMs: this.data.measurementWindowEndMs,
-                    pageWeightKB: this.data.pageWeightKB,
-                    pageWeightKiB: this.data.pageWeightKiB,
-                    measuredResourceCount: this.data.measuredResourceCount,
-                    unknownResourceCount: this.data.unknownResourceCount,
-                    observableResourceRatio: this.data.observableResourceRatio,
-                    networkTransferBytes: this.data.networkTransferBytes,
-                    encodedBodyBytes: this.data.encodedBodyBytes,
-                    cachedBodyBytes: this.data.cachedBodyBytes,
-                    transferUpperBoundBytes: this.data.transferUpperBoundBytes,
+                    reasonCode: this._data.reasonCode,
+                    status: this._data.status,
+                    measurementSource: this._data.source,
+                    retrievalSource: this._data.source ? this._retrievalSource : null,
+                    factorSetId: this._data.factorSetId,
+                    measurementWindowStartMs: this._data.measurementWindowStartMs,
+                    measurementWindowEndMs: this._data.measurementWindowEndMs,
+                    pageWeightKB: this._data.pageWeightKB,
+                    pageWeightKiB: this._data.pageWeightKiB,
+                    measuredResourceCount: this._data.measuredResourceCount,
+                    unknownResourceCount: this._data.unknownResourceCount,
+                    observableResourceRatio: this._data.observableResourceRatio,
+                    networkTransferBytes: this._data.networkTransferBytes,
+                    modelledResourceBytes: this._data.modelledResourceBytes,
+                    encodedBodyBytes: this._data.encodedBodyBytes,
+                    cachedBodyBytes: this._data.cachedBodyBytes,
+                    transferUpperBoundBytes: this._data.transferUpperBoundBytes,
                 },
             }),
         );
@@ -565,12 +542,16 @@ export class CometWebCarbonBadge extends HTMLElementBase {
 
     private bindRetry() {
         const btn =
-            this.shadow.querySelector<HTMLButtonElement>('.cw-retry-btn');
+            this._shadow.querySelector<HTMLButtonElement>('.cw-retry-btn');
         if (btn) {
             btn.addEventListener('click', () => {
+                if (btn.dataset.cwAction === 'reload-document') {
+                    window.location.reload();
+                    return;
+                }
                 this.renderLoading();
                 this.reload({ force: true });
-                const status = this.shadow.querySelector<HTMLElement>('[role="status"]');
+                const status = this._shadow.querySelector<HTMLElement>('[role="status"]');
                 if (status) { status.tabIndex = -1; status.focus(); }
             });
         }

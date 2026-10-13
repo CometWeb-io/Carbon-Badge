@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.4
+
+- Estimate complete known-size cached loads with a separate resource-size method and scope; keep network bytes distinct.
+- Explain opaque timing data without an ineffective retry; reload the actual document for route changes and buffer overflow.
+- Keep hash-only navigation within the same document observation.
+
+
 ## 2.0.3 — Unreleased
 
 - Accept timezone-qualified timestamps with 1–9 fractional digits, validate offsets and calendar dates, and normalize to milliseconds before parsing in all browsers.

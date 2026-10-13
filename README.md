@@ -19,7 +19,7 @@ Get the copy-ready snippet from the [installation page](https://cometweb.io/carb
 <cometweb-carbon-badge theme="dark"></cometweb-carbon-badge>
 ```
 
-No account, API key or URL setup is needed. Local estimates describe this page load, not an average visitor or an entire website. Missing navigation timing, hidden resource sizes or a timing-buffer overflow produce **N/D**, with no letter grade. Incomplete data does not mean zero emissions. Cache hits and conditional revalidations are outside the first-load model and stay ungraded. SPA route changes cannot reuse the previous document timing as a new page score.
+No account, API key or URL setup is needed. Local estimates describe this page load, not an average visitor or an entire website. Missing navigation timing, hidden resource sizes or a timing-buffer overflow produce **N/D**, with no letter grade. Incomplete data does not mean zero emissions. When every observed resource size is known, cache hits and conditional revalidations use a separately labelled resource-size estimate. Actual network transfer remains a separate metric. SPA route changes cannot reuse the previous document timing as a new page score.
 
 A late-loaded badge with 250 or more existing resource entries also stays ungraded: the default timing buffer may already have lost entries. This conservative guard can show N/D even if the host enlarged its buffer. Entries cleared or discarded by other scripts before initialization cannot be reconstructed.
 
@@ -29,7 +29,7 @@ For a hosted script, use a versioned directory and the exact entry SRI from its 
 
 | Light | Dark | No measurement |
 | :---: | :---: | :---: |
-| ![Light theme: pale green grade tile, emissions value and subtle attribution.](docs/media/badge-light.png) | ![Dark theme: solid dark green surface and pale green grade tile.](docs/media/badge-dark.png) | ![Unavailable measurement: N/D with a Retry button.](docs/media/badge-unavailable.png) |
+| ![Light theme: pale green grade tile, emissions value and subtle attribution.](docs/media/badge-light.png) | ![Dark theme: solid dark green surface and pale green grade tile.](docs/media/badge-dark.png) | ![Unavailable measurement: N/D with a reason and a recovery action where possible.](docs/media/badge-unavailable.png) |
 
 These are component screenshots with synthetic fixture data, not measurements of a live website.
 
@@ -132,7 +132,7 @@ Do not combine `snapshot-id` with `mode="api"` or `mode="estimate"`: the badge s
 - URL mode removes every query parameter. If a backend snapshot is indexed by a semantic query (for example `?item=123`), embed its `snapshot-id`; the query-free URL request will not select that snapshot.
 - An API result labeled `cometweb_scan` keeps that measurement source. It is not treated as a published snapshot, even if the payload includes a public ID or evidence URL.
 - An unrecognized or malformed `measurement_source` renders **N/D** instead of being relabeled `api`. Source-less legacy API responses retain the `api` fallback.
-- **`estimate`** waits for page quiescence, measures transfer with Resource Timing, then applies `swdm-v4-lite-first-load-v1`. DOM size is never used as a carbon score. Missing timing renders **N/D**.
+- **`estimate`** waits for page quiescence, measures transfer with Resource Timing, then applies `swdm-v4-lite-first-load-v1` to observed network transfer. Loads with known cached bodies use `swdm-v4-lite-resource-sizes-v1`, labelled as an estimate from resource sizes. DOM size is never used as a carbon score. Missing timing renders **N/D**.
 
 Cheap published snapshot read on the server: `GET /api/public/carbon-badge/id/{public_id}` — no HTTP re-scan.
 

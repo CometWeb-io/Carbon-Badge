@@ -4,6 +4,15 @@ import ts from 'typescript';
 
 const isProd = process.env.NODE_ENV === 'production';
 const plugins = (watch) => [
+    {
+        // These templates contain only static CSS, never expressions or content strings.
+        // Keep the source readable and remove formatting from visitor downloads.
+        name: 'compact-badge-css',
+        transform(code, id) {
+            if (!id.endsWith('/src/styles.ts')) return null;
+            return { code: code.replace(/`([^`]+)`/g, (_, css) => '`' + css.replace(/\s+/g, ' ').replace(/\s*([{}:;,])\s*/g, '$1').trim() + '`'), map: null };
+        },
+    },
     typescript({ tsconfig: './tsconfig.json', declaration: true, declarationDir: 'dist', sourceMap: !isProd,
         // Static compilation needs no filesystem watchers; leaked macOS handles prevent exit.
         typescript: watch ? ts : { ...ts, sys: { ...ts.sys,
@@ -11,6 +20,7 @@ const plugins = (watch) => [
         } },
     }),
     terser({
+        ecma: 2020,
         compress: { drop_console: isProd ? ['log'] : [], passes: 3, toplevel: true },
         mangle: {
             toplevel: true,

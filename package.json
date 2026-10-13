@@ -1,6 +1,6 @@
 {
     "name": "@cometweb/carbon-badge",
-    "version": "2.0.3",
+    "version": "2.0.4",
     "description": "Web component for modelled page-load carbon estimates with explicit timing scope and published snapshots",
     "main": "dist/cometweb-carbon-badge.umd.js",
     "module": "dist/cometweb-carbon-badge.esm.js",
