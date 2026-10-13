@@ -20,10 +20,11 @@ test('unfinished and later transfers do not become a claimed complete document b
     const cutoff = await badge.evaluate(el => (el as any).badgeData.measurementWindowEndMs);
     expect(await badge.evaluate(el => (el as any).badgeData.transferUpperBoundBytes)).toBeNull();
     if (await badge.evaluate(el => (el as any).measurementStatus) === 'ready') {
-        await expect(badge).toContainText('Observed-transfer SWDM v4 estimate');
+        await expect(badge).toContainText('SWDM v4');
     } else {
         expect(await badge.evaluate(el => (el as any).score)).toBeNull();
-        await expect(badge).toContainText('grade withheld');
+        await expect(badge).toContainText('N/D');
+        await expect(badge.locator('.cw-grade')).toContainText('N/D');
     }
     expect(await page.evaluate(() => (window as any).unfinishedTransferDone)).toBe(false);
     finish();

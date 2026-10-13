@@ -87,9 +87,9 @@ describe('local estimate completeness', () => {
         expect(data.co2Grams).toBeNull();
         expect(data.score).toBeNull();
         const host = document.createElement('div');
-        mountUnknown(host, 'Incomplete timing', { data });
-        expect(host.textContent).toContain('timing history incomplete');
-        expect(host.textContent).not.toContain('251 of 251');
+        mountBadge(host, data, 'dark');
+        expect(host.textContent).toContain('Timing history truncated');
+        expect(host.querySelector('button')?.dataset.cwAction).toBe('reload-document');
     });
 
     it('withholds a grade when navigation timing is missing', () => {

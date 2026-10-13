@@ -33,6 +33,7 @@ export {
     FACTOR_SET_ID_SWDM_V4,
     SCORE_MODEL_ID_COMETWEB_BANDS_V1,
     FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1,
+    FORMULA_ID_SWDM_V4_LITE_RESOURCE_SIZES_V1,
 } from './types';
 export type {
     BadgeData,

@@ -64,7 +64,8 @@ export function createStaticServer(rootDir = process.cwd()) {
       const body = await readFile(file);
       const moduleHeaders = isPathInsideRoot(file, resolve(root, 'dist')) && extname(file) === '.js'
         ? { 'Access-Control-Allow-Origin': '*', 'Timing-Allow-Origin': '*' } : {};
-      response.writeHead(200, { 'Content-Type': contentType, ...moduleHeaders });
+      const cacheHeaders = pathname === '/e2e/fixtures/cache.css' ? { 'Cache-Control': 'public, max-age=3600' } : {};
+      response.writeHead(200, { 'Content-Type': contentType, ...moduleHeaders, ...cacheHeaders });
       response.end(body);
     } catch {
       response.writeHead(404);

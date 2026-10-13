@@ -54,19 +54,22 @@ describe('audit P0/P1 regressions', () => {
     it('reports cached body sizes separately without inventing network transfer', () => {
         timing([{ transferSize: 0, encodedBodySize: 20_000 }]);
         const result = estimateCO2Detailed();
-        expect(result.pageWeightBytes).toBe(10_000);
+        expect(result.pageWeightBytes).toBe(30_000);
         expect(result.data).toMatchObject({
             networkTransferBytes: 10_000, encodedBodyBytes: 29_000,
-            cachedBodyBytes: 20_000, status: 'partial', score: null,
-            reasonCode: 'cache-outside-first-load',
+            cachedBodyBytes: 20_000, status: 'ready',
+            measurementScope: 'document-observed-resource-sizes',
+            measurementMethod: 'resource_timing_resource_sizes',
+            formulaId: 'swdm-v4-lite-resource-sizes-v1',
         });
+        expect(result.data.co2Grams).toBeCloseTo(0.004446, 9);
     });
 
     it('records conditional cache revalidation without charging the cached body as transfer', () => {
         timing([{ transferSize: 300, encodedBodySize: 20_000 }]);
         const result = estimateCO2Detailed();
-        expect(result.pageWeightBytes).toBe(10_300);
-        expect(result.data).toMatchObject({ cachedBodyBytes: 20_000, score: null });
+        expect(result.pageWeightBytes).toBe(30_000);
+        expect(result.data).toMatchObject({ cachedBodyBytes: 20_000, networkTransferBytes: 10_300, status: 'ready' });
     });
 
     it('does not attribute document timing to a different SPA route', () => {
@@ -136,4 +139,79 @@ describe('audit P0/P1 regressions', () => {
         expect(el.score).toBeNull();
         expect(error.mock.calls[0][0].detail.status).toBe('partial');
     });
+});
+
+
+describe('known-size cache estimates', () => {
+    it('estimates an all-cached document while keeping actual network bytes zero', () => {
+        timing([{ transferSize: 0, encodedBodySize: 20_000 }], [{ transferSize: 0, encodedBodySize: 10_000 }]);
+        const result = estimateCO2Detailed();
+        expect(result.pageWeightBytes).toBe(30_000);
+        expect(result.data).toMatchObject({ status: 'ready', networkTransferBytes: 0, cachedBodyBytes: 30_000, estimatePartial: false });
+        expect(result.data.co2Grams).toBeCloseTo(0.004446, 9);
+        const root = document.createElement('div');
+        mountBadge(root, result.data, 'dark', { language: 'pl' });
+        expect(root.textContent).toContain('rozmiarów zasobów');
+        expect(root.textContent).not.toContain('pierwsze ładowanie');
+        expect(root.textContent).not.toContain('Brak pełnych danych');
+        expect(root.querySelector('[role="status"]')?.getAttribute('aria-label')).toContain('rozmiarów zasobów');
+    });
+    it('withholds a cached estimate if even one resource is opaque', () => {
+        timing([{ transferSize: 0, encodedBodySize: 20_000 }, { transferSize: 0, encodedBodySize: 0 }]);
+        const data = estimateCO2Detailed().data;
+        expect(data).toMatchObject({ status: 'partial', score: null, co2Grams: null, reasonCode: 'unobservable-resource' });
+        const root = document.createElement('div');
+        mountBadge(root, data, 'dark', { language: 'pl' });
+        expect(root.querySelector('button')).toBeNull();
+        expect(root.textContent).toContain('Timing-Allow-Origin');
+        expect(root.textContent).not.toContain('niepełna historia');
+    });
+    it('offers a real document reload after a SPA route change', () => {
+        timing([], [{ name: 'https://example.com/', transferSize: 10_000 }]);
+        vi.stubGlobal('location', { href: 'https://example.com/new-route' });
+        const root = document.createElement('div');
+        mountBadge(root, estimateCO2Detailed().data, 'dark', { language: 'pl' });
+        expect(root.querySelector('button')?.getAttribute('data-cw-action')).toBe('reload-document');
+        expect(root.querySelector('button')?.textContent).toContain('Odśwież');
+    });
+    it('does not invalidate the same document on a hash-only change', () => {
+        timing();
+        vi.stubGlobal('location', { href: 'https://example.com/#one' });
+        estimateCO2Detailed();
+        vi.stubGlobal('location', { href: 'https://example.com/#two' });
+        expect(estimateCO2Detailed().data.status).toBe('ready');
+    });
+});
+
+
+describe('cache timing validation', () => {
+    it.each([1, 100, 300, 301])('recognizes a revalidated %s-byte body with or without deliveryType', encodedBodySize => {
+        for (const deliveryType of [undefined, 'cache']) {
+            timing([{ transferSize: 300, encodedBodySize, deliveryType }]);
+            expect(estimateCO2Detailed().data).toMatchObject({ measurementScope: 'document-observed-resource-sizes', cachedBodyBytes: encodedBodySize });
+            timing([], [{ transferSize: 300, encodedBodySize, deliveryType }]);
+            expect(estimateCO2Detailed().data.measurementScope).toBe('document-observed-resource-sizes');
+        }
+    });
+    it.each([undefined, NaN, -1, Infinity])('withholds the cache model when encoded size is malformed (%s)', encodedBodySize => {
+        timing([{ transferSize: 0, encodedBodySize: 20_000 }, { transferSize: 300, encodedBodySize }]);
+        expect(estimateCO2Detailed().data).toMatchObject({ score: null, reasonCode: 'unobservable-resource' });
+    });
+    it('does not throw or grade a malformed navigation identity', () => {
+        timing([], [{ name: 'malformed', transferSize: 10_000 }]);
+        expect(estimateCO2Detailed().data).toMatchObject({ score: null, status: 'stale' });
+    });
+});
+
+
+it.each([undefined, NaN, -1, Infinity])('keeps malformed cache sizes ungraded in the element and error event (%s)', async encodedBodySize => {
+    timing([{ transferSize: 0, encodedBodySize: 20_000 }, { transferSize: 300, encodedBodySize }]);
+    const el = document.createElement('cometweb-carbon-badge') as CometWebCarbonBadge;
+    let detail: any;
+    el.addEventListener('cometweb:badge-error', event => { detail = (event as CustomEvent).detail; });
+    document.body.append(el);
+    await vi.waitFor(() => expect(detail?.reasonCode).toBe('unobservable-resource'), { timeout: 1800 });
+    expect(el.badgeData).toMatchObject({ score: null, co2Grams: null, status: 'partial' });
+    expect(detail.status).toBe('partial');
+    expect(el.shadowRoot?.querySelector('button')).toBeNull();
 });

@@ -1,5 +1,5 @@
 import type { BadgeData, BadgeTheme } from './types';
-import { SCORE_MODEL_ID_COMETWEB_BANDS_V1, FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1 } from './types';
+import { SCORE_MODEL_ID_COMETWEB_BANDS_V1, FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1, FORMULA_ID_SWDM_V4_LITE_RESOURCE_SIZES_V1 } from './types';
 import { clamp } from './utils';
 import { hasInvalidFreshness, normalizeBadgeData, timestampMs } from './normalize';
 import { co2ToScore } from './estimator';
@@ -141,6 +141,9 @@ function subtitleFor(data: BadgeData, published: boolean, language: BadgeLanguag
             highlight: `${new Intl.NumberFormat(language).format(clamp(data.cleanerThan, 0, 100))}%`,
         };
     }
+    if (data.source === 'estimate' && data.formulaId === FORMULA_ID_SWDM_V4_LITE_RESOURCE_SIZES_V1) {
+        return { text: 'SWDM v4 resource-size estimate (includes cache)' };
+    }
     if (data.source === 'estimate' && data.formulaId === FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1) {
         return {
             text: data.estimatePartial
@@ -152,8 +155,10 @@ function subtitleFor(data: BadgeData, published: boolean, language: BadgeLanguag
 }
 
 export function measurementReason(data: BadgeData | null): string {
-    if (data?.reasonCode === 'document-url-changed') return 'Document URL changed; first-load grade withheld';
-    if (data?.reasonCode === 'cache-outside-first-load') return 'Cached load; first-load grade withheld';
+    if (data?.reasonCode === 'document-url-changed') return 'URL changed. Reload this page.';
+    if (data?.reasonCode === 'timing-buffer-overflow') return 'Timing history truncated. Reload this page.';
+    if (data?.reasonCode === 'unobservable-resource') return 'Hidden sizes. Enable Timing-Allow-Origin or use Light.';
+    if (data?.reasonCode === 'timing-unavailable') return 'No timing data. Use Light.';
     if (data?.status === 'revoked') return 'Measurement revoked';
     if (data?.status === 'stale') return 'Stale measurement — refresh required';
     return data?.status === 'partial' ? 'Partial measurement — grade withheld' : 'No usable measurement';
@@ -181,7 +186,7 @@ export function badgeViewModel(
     const ariaCo2 = display.startsWith('<') ? `${translate('less than', language)} ${display.slice(1)}` : display;
     return {
         published: isPublishedSnapshot(data, trust),
-        ariaLabel: `${measuredSubject(data.url)}: ${translate('estimated', language)} ${ariaCo2}g CO₂e ${translate(data.measurementScope === 'document-first-load' ? 'per first document load' : 'per page load', language)}, ${translate('CometWeb Score', language)} ${score}`,
+        ariaLabel: `${measuredSubject(data.url)}: ${translate('estimated', language)} ${ariaCo2}g CO₂e ${translate(data.measurementScope === 'document-observed-resource-sizes' ? 'from observed resource sizes' : data.measurementScope === 'document-first-load' ? 'per first document load' : 'per page load', language)}, ${translate('CometWeb Score', language)} ${score}`,
     };
 }
 
@@ -239,29 +244,24 @@ export function mountUnknown(
     const measured = options.data?.measuredResourceCount;
     const unknown = options.data?.unknownResourceCount;
     if (measured !== undefined && unknown !== undefined) {
-        const visibility = unknown === 0 && options.data?.estimatePartial
-            ? `${measured} ${translate('resource sizes visible', language)}; ${translate('timing history incomplete', language)}`
-            : `${measured} ${translate('of', language)} ${measured + unknown} ${translate('resource sizes visible', language)}`;
+        const visibility = `${measured} ${translate('of', language)} ${measured + unknown} ${translate('resource sizes visible', language)}`;
         content.append(element('div', { class: 'cw-subtitle' }, visibility));
     }
     if (typeof options.data?.networkTransferBytes === 'number') content.append(element('div', { class: 'cw-subtitle' },
-        `${translate('Observed transfer', language)} ≥ ${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(options.data.networkTransferBytes / 1000)} KB`));
-    const actions = element('div', { class: 'cw-error-actions' });
-    actions.append(
-        element(
-            'button',
-            {
-                type: 'button',
-                class: 'cw-retry-btn',
-                'aria-label': translate('Retry carbon measurement', language),
-            },
-            translate('Retry', language),
-        ),
-    );
-    content.append(
-        actions,
-        element('a', { class: 'cw-footer', href: DEFAULT_EVIDENCE_URL, target: '_blank', rel: 'noopener noreferrer', 'aria-label': `Carbon Badge — CometWeb (${translate('opens in new tab', language)})` }, translate('Powered by CometWeb', language)),
-    );
+        `${translate('Reported transfer', language)} ≈ ${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(options.data.networkTransferBytes / 1000)} KB`));
+    const code = options.data?.reasonCode;
+    const reloadDocument = code === 'document-url-changed' || code === 'timing-buffer-overflow';
+    const unrecoverable = code === 'unobservable-resource' || code === 'timing-unavailable';
+    if (!unrecoverable) {
+        const actions = element('div', { class: 'cw-error-actions' });
+        actions.append(element('button', {
+            type: 'button', class: 'cw-retry-btn',
+            'data-cw-action': reloadDocument ? 'reload-document' : 'retry',
+            'aria-label': translate(reloadDocument ? 'Reload this page' : 'Retry carbon measurement', language),
+        }, translate(reloadDocument ? 'Reload this page' : 'Retry', language)));
+        content.append(actions);
+    }
+    content.append(element('a', { class: 'cw-footer', href: DEFAULT_EVIDENCE_URL, target: '_blank', rel: 'noopener noreferrer', 'aria-label': `Carbon Badge — CometWeb (${translate('opens in new tab', language)})` }, translate('Powered by CometWeb', language)));
     badge.append(content);
     status.append(badge);
     root.append(status);
@@ -315,7 +315,7 @@ export function mountBadge(
 
     const content = element('div', { class: 'cw-content' });
     const title = element('div', { class: 'cw-title' }, `${co2Display}g CO₂e `);
-    title.append(element('small', {}, `/ ${translate(data.measurementScope === 'document-first-load' ? 'first load' : 'load', language)}`));
+    title.append(element('small', {}, `/ ${translate(data.measurementScope === 'document-observed-resource-sizes' ? 'resource sizes' : data.measurementScope === 'document-first-load' ? 'first load' : 'load', language)}`));
 
     const subtitleEl = element('div', { class: 'cw-subtitle' }, translate(subtitle.text, language));
     if (subtitle.highlight) {
