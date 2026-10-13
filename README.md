@@ -15,7 +15,7 @@ The default badge measures the current page in the visitor's browser. It makes *
 Get the copy-ready snippet from the [installation page](https://cometweb.io/carbon-badge#install) when the release is available, or build this source and self-host the complete `dist/embed/` folder:
 
 ```html
-<script type="module" src="/vendor/carbon-badge/2.0.3/carbon-badge.js"></script>
+<script type="module" src="/vendor/carbon-badge/2.0.4/carbon-badge.js"></script>
 <cometweb-carbon-badge theme="dark"></cometweb-carbon-badge>
 ```
 
@@ -50,7 +50,7 @@ Omit `variant` for the default card. All variants retain the estimate, measured 
 
 ## Install and add it to a page
 
-The code in this repository is release candidate **2.0.3** (not a claim of npm/CDN publication). Build it locally when you need the exact behavior documented here:
+The code in this repository is release candidate **2.0.4** (not a claim of npm/CDN publication). Build it locally when you need the exact behavior documented here:
 
 Build the reviewed candidate checkout with Node.js 22 or newer. A clone of `main` contains the latest committed source; it does not contain uncommitted changes or establish npm/CDN publication.
 
@@ -61,10 +61,10 @@ npm ci
 npm run build
 ```
 
-Copy the entire `dist/embed/` folder to `/vendor/carbon-badge/2.0.3/`, preserving `chunks/` and file names, then add:
+Copy the entire `dist/embed/` folder to `/vendor/carbon-badge/2.0.4/`, preserving `chunks/` and file names, then add:
 
 ```html
-<script type="module" src="/vendor/carbon-badge/2.0.3/carbon-badge.js"></script>
+<script type="module" src="/vendor/carbon-badge/2.0.4/carbon-badge.js"></script>
 <cometweb-carbon-badge theme="light" mode="estimate"></cometweb-carbon-badge>
 ```
 

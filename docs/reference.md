@@ -102,7 +102,7 @@ document.querySelector('cometweb-carbon-badge')
   });
 ```
 
-## First-load observation contract (2.0.3 candidate)
+## First-load observation contract (2.0.4 candidate)
 
 `measurementScope: document-first-load` covers browser-visible navigation and resource entries. It is not a complete user session, a return-visit model or physical energy measurement. `networkTransferBytes` uses browser-reported `transferSize` only (modern browsers substitute a fixed 300-byte header allowance, so this is not exact wire traffic); `encodedBodyBytes` is separate. A zero transfer with a visible encoded body is a cache hit; a transfer smaller than that body, a 300-byte transfer with a nonempty body, or `deliveryType: cache` also selects cache scope. `cachedBodyBytes` reports the body served from cache, never network transfer. When all observed entries have a usable size and timing history is intact, either case selects `measurementScope: document-observed-resource-sizes`, `measurementMethod: resource_timing_resource_sizes` and `formulaId: swdm-v4-lite-resource-sizes-v1`. Its formula input (`modelledResourceBytes`) sums `max(transferSize, encodedBodySize)` per observed entry: full transfers retain the browser-reported transfer size, cached bodies use their known encoded size, and cache-response headers are not added. SWDM factors are unchanged. This models the sizes observed in this document, not the actual emissions of a cached visit or unobserved future lazy loads. A cold load retains `document-first-load` and the original transfer formula.
 
