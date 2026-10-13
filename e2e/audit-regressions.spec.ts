@@ -49,11 +49,12 @@ test('continuous resources reach the hard deadline without a grade', async ({ pa
 });
 
 
-test('a real cached response selects the resource-size model and preserves reported transfer', async ({ page }) => {
+test('a real cached response selects the resource-size model and preserves reported transfer', async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'Headless WebKit reports both force-cache fetches as network transfers; this fixture cannot qualify its native HTTP cache.');
     await page.goto('/e2e/fixtures/badge.html');
     await page.evaluate(async () => {
-        await fetch('/e2e/fixtures/cache.css').then(response => response.text());
-        await fetch('/e2e/fixtures/cache.css').then(response => response.text());
+        await fetch('/e2e/fixtures/cache.css', { cache: 'reload' }).then(response => response.text());
+        await fetch('/e2e/fixtures/cache.css', { cache: 'force-cache' }).then(response => response.text());
         (document.querySelector('cometweb-carbon-badge') as any).reload();
     });
     const badge = page.locator('cometweb-carbon-badge');
