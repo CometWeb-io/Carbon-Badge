@@ -15,6 +15,7 @@ const polish: Record<string, string> = {
     'No timing data. Use Light.': 'Brak danych zasobów przeglądarki. Użyj Light.',
     'Measurement revoked': 'Pomiar został wycofany',
     'Not available': 'Brak pełnych danych',
+    'At least': 'Co najmniej',
     'Retry': 'Ponów odczyt',
     'Reload this page': 'Odśwież tę stronę',
     'from observed resource sizes': 'z zaobserwowanych rozmiarów zasobów',

@@ -156,15 +156,26 @@ describe('known-size cache estimates', () => {
         expect(root.textContent).not.toContain('Brak pełnych danych');
         expect(root.querySelector('[role="status"]')?.getAttribute('aria-label')).toContain('rozmiarów zasobów');
     });
-    it('withholds a cached estimate if even one resource is opaque', () => {
+    it('withholds the grade if even one resource is opaque but shows the visible floor', () => {
         timing([{ transferSize: 0, encodedBodySize: 20_000 }, { transferSize: 0, encodedBodySize: 0 }]);
         const data = estimateCO2Detailed().data;
         expect(data).toMatchObject({ status: 'partial', score: null, co2Grams: null, reasonCode: 'unobservable-resource' });
+        expect(data.co2LowerBoundGrams).toBeGreaterThan(0);
         const root = document.createElement('div');
         mountBadge(root, data, 'dark', { language: 'pl' });
         expect(root.querySelector('button')).toBeNull();
+        expect(root.textContent).toContain('Co najmniej');
         expect(root.textContent).toContain('Timing-Allow-Origin');
+        expect(root.querySelector('.cw-grade')?.textContent).toBe('≥');
+        expect(root.querySelector('[role="status"]')?.getAttribute('aria-label')).toContain('Co najmniej');
         expect(root.textContent).not.toContain('niepełna historia');
+    });
+    it('gives no floor when the timing history was truncated', () => {
+        timing([{ transferSize: 0, encodedBodySize: 20_000 }, { transferSize: 0, encodedBodySize: 0 }]);
+        const data = estimateCO2Detailed().data;
+        const root = document.createElement('div');
+        mountBadge(root, { ...data, reasonCode: 'timing-buffer-overflow', co2LowerBoundGrams: null }, 'dark', { language: 'en' });
+        expect(root.querySelector('.cw-grade')?.textContent).toBe('N/D');
     });
     it('offers a real document reload after a SPA route change', () => {
         timing([], [{ name: 'https://example.com/', transferSize: 10_000 }]);
