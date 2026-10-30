@@ -2,12 +2,23 @@ import { parseApiResponse } from '../api-response';
 /**
  * Tests for URL canonicalize + API fail-closed normalizer
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     canonicalizeBadgeUrl,
     normalizeBadgeData,
 } from '../normalize';
 import { SCORE_MODEL_ID_COMETWEB_BANDS_V1 } from '../types';
+
+// Snapshot fixtures carry fixed measured_at/valid_until dates. Pin the clock
+// inside their validity window so the suite does not expire with the calendar.
+const FIXTURE_NOW = new Date('2026-10-01T00:00:00.000Z');
+beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(FIXTURE_NOW);
+});
+afterEach(() => {
+    vi.useRealTimers();
+});
 
 const SNAPSHOT_PROVENANCE = {
     formula_id: 'swdm-v4-lite',
