@@ -68,6 +68,11 @@ export interface BadgeData {
     measuredResourceCount?: number;
     unknownResourceCount?: number;
     observableResourceRatio?: number;
+    /**
+     * CO₂e from the visible resources only, when other resource sizes are hidden.
+     * The real value is higher; it is shown as "at least" and never gets a letter.
+     */
+    co2LowerBoundGrams?: number | null;
     /** @deprecated Alias of observableResourceRatio. */
     coverageRatio?: number;
 }

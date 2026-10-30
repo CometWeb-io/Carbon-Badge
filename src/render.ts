@@ -225,20 +225,23 @@ export function mountUnknown(
 ): void {
     const language = options.language ?? 'en';
     clearRoot(root, options);
+    // Hidden third-party sizes still leave an honest floor from visible resources.
+    const low = options.data?.co2LowerBoundGrams;
+    const floor = options.data?.reasonCode === 'unobservable-resource' && low && low > 0
+        ? `${translate('At least', language)} ${Math.max(low, 0.01).toFixed(2)} g CO₂e` : '';
+    const subject = translate(measuredSubject(options.data?.url || ''), language);
     const status = element('div', {
         role: 'status',
         'aria-live': 'polite',
-        'aria-label': `${translate(measuredSubject(options.data?.url || ''), language)}: ${translate('carbon footprint not available', language)}`,
+        'aria-label': `${subject}: ${floor || translate('carbon footprint not available', language)}`,
         lang: language,
     });
     const badge = element('div', { class: 'cw-badge error' });
-    badge.append(
-        element('div', { class: 'cw-grade grade-unknown', 'aria-hidden': 'true' }, 'N/D'),
-    );
+    badge.append(element('div', { class: 'cw-grade grade-unknown', 'aria-hidden': 'true' }, floor ? '≥' : 'N/D'));
     const content = element('div', { class: 'cw-content' });
     if (options.data?.url) content.append(element('div', { class: 'cw-host' }, measuredSubject(options.data.url)));
     content.append(
-        element('div', { class: 'cw-title' }, translate('Not available', language)),
+        element('div', { class: 'cw-title' }, floor || translate('Not available', language)),
         element('div', { class: 'cw-subtitle' }, translate(reason, language)),
     );
     const measured = options.data?.measuredResourceCount;
