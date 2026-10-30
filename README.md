@@ -14,13 +14,13 @@ Paste this where the badge should appear. No account, API key, cookies or tracki
 
 ```html
 <script type="module"
-  src="https://cdn.jsdelivr.net/npm/@cometweb/carbon-badge@2.0.4/dist/cometweb-carbon-badge.esm.js"
-  integrity="sha384-QNxl+ZOlzFXMbvclarKs9Nz0LgS5MmPnP5eGutrwB/0F48yi0irpLHaissISHd1C"
+  src="https://cdn.jsdelivr.net/npm/@cometweb/carbon-badge@2.0.6/dist/cometweb-carbon-badge.esm.js"
+  integrity="sha384-N55q73xI0VL1Hp6MQp5WSFoVwZUDUdfN5JsQvjhkzU9VLHguRtdTculNBP7uvm8l"
   crossorigin="anonymous"></script>
 <cometweb-carbon-badge theme="light" mode="estimate"></cometweb-carbon-badge>
 ```
 
-The same file is served from `https://cometweb.io/scripts/carbon-badge/2.0.4/cometweb-carbon-badge.esm.js` with the same hash. It is the single-file SDK, so one SRI hash covers all of its JavaScript. Use `theme="dark"` on dark backgrounds, and see [Choose a look](#choose-a-look) for the smaller variants.
+The same file is served from `https://cometweb.io/scripts/carbon-badge/2.0.6/cometweb-carbon-badge.esm.js` with the same hash. It is the single-file SDK, so one SRI hash covers all of its JavaScript. Use `theme="dark"` on dark backgrounds, and see [Choose a look](#choose-a-look) for the smaller variants.
 
 With a bundler:
 
@@ -50,7 +50,7 @@ The default badge measures the current page in the visitor's browser. It makes *
 The copy-ready snippet is above and on the [installation page](https://cometweb.io/carbon-badge#install). To self-host the lightweight split build, serve the complete `dist/embed/` folder:
 
 ```html
-<script type="module" src="/vendor/carbon-badge/2.0.4/carbon-badge.js"></script>
+<script type="module" src="/vendor/carbon-badge/2.0.6/carbon-badge.js"></script>
 <cometweb-carbon-badge theme="dark"></cometweb-carbon-badge>
 ```
 
