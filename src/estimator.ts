@@ -121,15 +121,14 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
         EMBODIED_NETWORK_KWH_PER_GB +
         EMBODIED_USER_KWH_PER_GB;
 
-    const totalCo2 =
-        !partial && pageWeightBytes > 0 &&
-        measured.measuredResourceCount > 0 &&
-        measured.unknownResourceCount === 0
-            ? dataTransferGb *
-              (operationalKwhPerGb + embodiedKwhPerGb) *
-              CI_GLOBAL
-            : null;
+    const visibleCo2 = pageWeightBytes > 0 && measured.measuredResourceCount > 0
+        ? dataTransferGb * (operationalKwhPerGb + embodiedKwhPerGb) * CI_GLOBAL : null;
+    const totalCo2 = !partial && measured.unknownResourceCount === 0 ? visibleCo2 : null;
     const score = totalCo2 === null ? null : co2ToScore(totalCo2);
+    // Hidden third-party sizes only push the true value up, so the visible part
+    // is an honest floor. Stale URLs and truncated timing histories get no floor.
+    const co2LowerBound = totalCo2 === null && measured.unknownResourceCount > 0 &&
+        !documentUrlChanged && !resourceTimingBufferOverflowed ? visibleCo2 : null;
 
     const data: BadgeData = {
         url: canonicalizeBadgeUrl(href) || '',
@@ -180,6 +179,7 @@ export function estimateCO2Detailed(greenHost: boolean = false): EstimateResult 
         unknownResourceCount: measured.unknownResourceCount,
         observableResourceRatio: measured.observableResourceRatio,
         coverageRatio: measured.observableResourceRatio,
+        co2LowerBoundGrams: co2LowerBound,
     };
 
     return {

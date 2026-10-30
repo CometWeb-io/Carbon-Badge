@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- When some resources hide their size (typical for third-party tags), the badge now shows **"At least X g CO₂e"** from the visible resources instead of an empty N/D. The letter grade is still withheld, because a grade from a floor would flatter the page. Truncated timing histories and changed URLs still show N/D. New field `co2LowerBoundGrams` on badge data.
+- Initial embed gzip budget raised from 10,500 B to 10,700 B for this change.
+
 ## 2.0.4
 
 - Estimate complete known-size cached loads with a separate resource-size method and scope; keep network bytes distinct.

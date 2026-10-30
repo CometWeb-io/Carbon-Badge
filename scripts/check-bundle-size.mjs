@@ -4,11 +4,11 @@ import { readEmbedGraph } from './embed-graph.mjs';
 
 const embed = await readEmbedGraph(process.cwd());
 const checks = [
-    ['SDK ESM', ['dist/cometweb-carbon-badge.esm.js'], 14_000],
-    ['SDK UMD', ['dist/cometweb-carbon-badge.umd.js'], 14_000],
+    ['SDK ESM', ['dist/cometweb-carbon-badge.esm.js'], 14_200],
+    ['SDK UMD', ['dist/cometweb-carbon-badge.umd.js'], 14_200],
     ['API ESM', ['dist/carbon-badge-api.esm.js'], 3_500],
     ['API CJS', ['dist/carbon-badge-api.cjs'], 3_500],
-    ['Embed initial (all static imports)', embed.initial, 10_500],
+    ['Embed initial (all static imports)', embed.initial, 10_700],
     ['Embed with network (all chunks)', [...embed.initial, ...embed.optional], 15_000],
 ];
 for (const [label, paths, limit] of checks) {

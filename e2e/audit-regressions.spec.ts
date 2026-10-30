@@ -11,7 +11,7 @@ test('a cross-origin response without TAO withholds the grade in the real browse
         (document.querySelector('cometweb-carbon-badge') as any).reload();
     });
     const badge = page.locator('cometweb-carbon-badge');
-    await expect(badge).toContainText('N/D');
+    await expect(badge).toContainText(/N\/D|At least/);
     await page.waitForFunction(() => (document.querySelector('cometweb-carbon-badge') as any)?.badgeData?.reasonCode === 'unobservable-resource');
     expect(await badge.evaluate((el: any) => el.score)).toBeNull();
 });
@@ -42,7 +42,7 @@ test('continuous resources reach the hard deadline without a grade', async ({ pa
         document.body.append(document.createElement('cometweb-carbon-badge'));
     });
     const badge = page.locator('cometweb-carbon-badge');
-    await expect(badge).toContainText('N/D');
+    await expect(badge).toContainText(/N\/D|At least/);
     expect(await badge.evaluate((el: any) => ({ status: el.measurementStatus, score: el.score, reason: el.badgeData.reasonCode })))
         .toEqual({ status: 'partial', score: null, reason: 'quiescence-timeout' });
     await page.evaluate(() => clearInterval((window as any).resourceInterval));

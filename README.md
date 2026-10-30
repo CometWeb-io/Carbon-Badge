@@ -1,6 +1,6 @@
 # CometWeb Carbon Badge
 
-Web component that shows estimated **CO₂e for a first document load**, its source and measurement status. It has zero runtime dependencies, light/dark themes and three visual variants. The lightweight embed has a **10,500 B gzip initial-load CI budget**; the full SDK retains a **14,000 B** budget.
+Web component that shows estimated **CO₂e for a first document load**, its source and measurement status. It has zero runtime dependencies, light/dark themes and three visual variants. The lightweight embed has a **10,700 B gzip initial-load CI budget**; the full SDK retains a **14,000 B** budget.
 
 ![A page or API result becomes a carbon estimate with its method and status; missing data stays N/D.](docs/media/overview.svg)
 
@@ -109,7 +109,7 @@ All entry points belong to one npm package and share its version.
 
 | Import | Purpose | Production gzip budget |
 | --- | --- | ---: |
-| `@cometweb/carbon-badge/embed` | ESM side effect: registers the component; API/cache code loads only in a visible API or snapshot mode | 10,500 B initially / 15,000 B with all network chunks |
+| `@cometweb/carbon-badge/embed` | ESM side effect: registers the component; API/cache code loads only in a visible API or snapshot mode | 10,700 B initially / 15,000 B with all network chunks |
 | `@cometweb/carbon-badge/api` | API client and response parser, without registering the component; ESM and CommonJS | 3,500 B per format |
 | `@cometweb/carbon-badge` | Existing full SDK with named exports and automatic registration; single-file ESM and UMD | 14,000 B per format |
 
