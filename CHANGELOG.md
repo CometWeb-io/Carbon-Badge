@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2.0.5 — 2026-10-31
 
 - When some resources hide their size (typical for third-party tags), the badge now shows **"At least X g CO₂e"** from the visible resources instead of an empty N/D. The letter grade is still withheld, because a grade from a floor would flatter the page. Truncated timing histories and changed URLs still show N/D. New field `co2LowerBoundGrams` on badge data.
-- Initial embed gzip budget raised from 10,500 B to 10,700 B for this change.
+- Initial embed gzip budget raised from 10,500 B to 10,700 B and full SDK budget from 14,000 B to 14,200 B for this change.
+- README leads with a copy-paste snippet and steps for WordPress, Shopify, Webflow and Wix.
+- Tests pin their clock, so fixtures no longer expire; dev-dependency advisories cleared.
 
 ## 2.0.4
 
