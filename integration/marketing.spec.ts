@@ -34,18 +34,19 @@ for (const locale of ['', '/pl']) {
     await page.waitForFunction(() => (document.querySelector('#main-content cometweb-carbon-badge') as any)?.measurementStatus != null);
     await expect(badge).toHaveAttribute('mode', 'estimate');
     await expect(badge).toHaveAttribute('lang', locale ? 'pl' : 'en');
-    await page.locator('.cw-cb-toggles').getByRole('button', { name: 'light', exact: true }).click();
-    await page.locator('.cw-cb-toggles').getByRole('button', { name: 'compact', exact: true }).click();
+    const tools = page.locator('.cb-win__tools');
+    await tools.getByRole('button', { name: 'light', exact: true }).click();
+    await tools.getByRole('button', { name: 'compact', exact: true }).click();
     await expect(badge).toHaveAttribute('theme', 'light');
     await expect(badge).toHaveAttribute('variant', 'compact');
-    const code = await page.locator('.badge-embed-code').innerText();
+    const code = await page.locator('.cb-code').innerText();
     expect(code).toContain(sri);
     expect(code).toContain('mode="estimate"');
     expect(code).toContain('theme="light" variant="compact"');
     expect(code).toContain(`https://cometweb.io${assetPath}`);
-    await expect(page.locator('.badge-download')).toHaveAttribute('href', assetPath);
-    await page.getByRole('button', { name: 'self-host', exact: true }).click();
-    await expect(page.locator('.badge-embed-code')).toContainText('src="/scripts/cometweb-carbon-badge.esm.js"');
+    await expect(page.locator('a.cb-link[download]')).toHaveAttribute('href', assetPath);
+    await page.locator('.cb-choice').getByRole('button', { name: locale ? 'Na twoim serwerze' : 'On your server', exact: true }).click();
+    await expect(page.locator('.cb-code')).toContainText('src="/scripts/cometweb-carbon-badge.esm.js"');
     for (const width of [390, 320, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -56,7 +57,7 @@ for (const locale of ['', '/pl']) {
 
 test('copied hosted snippet executes cross-origin with SRI and no Insight requests', async ({ page }) => {
   await page.goto(`${origin}/carbon-badge`);
-  const code = await page.locator('.badge-embed-code').innerText();
+  const code = await page.locator('.cb-code').innerText();
   // Change only the hosting origin so real CORS/SRI are exercised locally.
   const localCode = code.replace('https://cometweb.io', origin!);
   const visitorServer = createServer((_request, response) => {

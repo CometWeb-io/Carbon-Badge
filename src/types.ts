@@ -127,7 +127,7 @@ export interface APIResponse {
 }
 
 export const BADGE_CACHE_SCHEMA = 8;
-export const BADGE_VERSION = '2.0.5';
+export const BADGE_VERSION = '2.0.6';
 export const FACTOR_SET_ID_SWDM_V4 = 'swdm-v4-global-494-v1';
 export const FORMULA_ID_SWDM_V4_LITE_FIRST_LOAD_V1 = 'swdm-v4-lite-first-load-v1';
 export const FORMULA_ID_TRANSFER_V2 = 'cometweb_scan_transfer_v2';
