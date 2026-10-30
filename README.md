@@ -8,11 +8,46 @@ Web component that shows estimated **CO₂e for a first document load**, its sou
 
 The badge uses [CometWeb](https://cometweb.io) and documents a **SWDM v4 first-load lite approximation**. It is not a full visitor/cache model, an ESG certificate or a claim of a web-wide percentile. Product page: [cometweb.io/carbon-badge](https://cometweb.io/carbon-badge).
 
+## Add it in one minute
+
+Paste this where the badge should appear. No account, API key, cookies or tracking.
+
+```html
+<script type="module"
+  src="https://cdn.jsdelivr.net/npm/@cometweb/carbon-badge@2.0.4/dist/cometweb-carbon-badge.esm.js"
+  integrity="sha384-QNxl+ZOlzFXMbvclarKs9Nz0LgS5MmPnP5eGutrwB/0F48yi0irpLHaissISHd1C"
+  crossorigin="anonymous"></script>
+<cometweb-carbon-badge theme="light" mode="estimate"></cometweb-carbon-badge>
+```
+
+The same file is served from `https://cometweb.io/scripts/carbon-badge/2.0.4/cometweb-carbon-badge.esm.js` with the same hash. It is the single-file SDK, so one SRI hash covers all of its JavaScript. Use `theme="dark"` on dark backgrounds, and see [Choose a look](#choose-a-look) for the smaller variants.
+
+With a bundler:
+
+```bash
+npm i @cometweb/carbon-badge
+```
+
+```js
+import '@cometweb/carbon-badge/embed';
+```
+
+### Website builders
+
+Paths depend on your theme and plan; the idea is always the same: the `<script>` once per page, the `<cometweb-carbon-badge>` tag where the badge should show.
+
+- **WordPress:** add the `<script>` to the footer with a header and footer code plugin, then put `<cometweb-carbon-badge theme="light" mode="estimate"></cometweb-carbon-badge>` in a Custom HTML block or footer widget.
+- **Shopify:** Online Store → Themes → Edit code → `theme.liquid`, paste the whole snippet just before `</body>`, or use a Custom Liquid section in the footer.
+- **Webflow:** Site settings → Custom code → Footer code for the `<script>`, and an Embed element for the badge tag.
+- **Wix:** Settings → Custom code, paste the whole snippet at the end of the body. Avoid the HTML embed element: it runs in an iframe and would measure only that iframe.
+
+If the page loads third-party tags that hide their size (analytics, tag managers, pixels), the badge shows "At least X g" or N/D instead of a letter. That is expected: it never guesses hidden sizes.
+
 ## Free embed: local by default
 
 The default badge measures the current page in the visitor's browser. It makes **no score API requests**, starts no server scans, and reads or writes no localStorage or cookies. Loading a hosted script still creates an ordinary request to that file's hosting provider; self-host it to avoid that dependency.
 
-Get the copy-ready snippet from the [installation page](https://cometweb.io/carbon-badge#install) when the release is available, or build this source and self-host the complete `dist/embed/` folder:
+The copy-ready snippet is above and on the [installation page](https://cometweb.io/carbon-badge#install). To self-host the lightweight split build, serve the complete `dist/embed/` folder:
 
 ```html
 <script type="module" src="/vendor/carbon-badge/2.0.4/carbon-badge.js"></script>
@@ -48,11 +83,9 @@ These are component screenshots with synthetic fixture data, not measurements of
 
 Omit `variant` for the default card. All variants retain the estimate, measured host/path, source/status and attribution. `minimal` has a transparent background: use the light theme on a light surface and dark on a dark surface. Changing the variant does not fetch a new measurement.
 
-## Install and add it to a page
+## Build from source
 
-The code in this repository is release candidate **2.0.4** (not a claim of npm/CDN publication). Build it locally when you need the exact behavior documented here:
-
-Build the reviewed candidate checkout with Node.js 22 or newer. A clone of `main` contains the latest committed source; it does not contain uncommitted changes or establish npm/CDN publication.
+For contributors, or to self-host the code from `main`. Building needs Node.js 22 or newer.
 
 ```bash
 git clone https://github.com/CometWeb-io/Carbon-Badge.git
@@ -61,14 +94,14 @@ npm ci
 npm run build
 ```
 
-Copy the entire `dist/embed/` folder to `/vendor/carbon-badge/2.0.4/`, preserving `chunks/` and file names, then add:
+Copy the entire `dist/embed/` folder to `/vendor/carbon-badge/<version>/`, preserving `chunks/` and file names, then add:
 
 ```html
-<script type="module" src="/vendor/carbon-badge/2.0.4/carbon-badge.js"></script>
+<script type="module" src="/vendor/carbon-badge/<version>/carbon-badge.js"></script>
 <cometweb-carbon-badge theme="light" mode="estimate"></cometweb-carbon-badge>
 ```
 
-For a bundler, install the built package (`npm install /path/to/Carbon-Badge`) and use `import '@cometweb/carbon-badge/embed';`. Keep dynamic imports as separate chunks in the production bundler configuration to retain the initial-load saving.
+With a bundler, keep dynamic imports as separate chunks in production to retain the initial-load saving.
 
 ## Package entry points
 
