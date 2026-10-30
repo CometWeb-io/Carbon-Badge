@@ -78,9 +78,6 @@
     "publishConfig": {
         "access": "public"
     },
-    "engines": {
-        "node": ">=22"
-    },
     "devDependencies": {
         "@axe-core/playwright": "4.13.0",
         "@playwright/test": "^1.51.0",
