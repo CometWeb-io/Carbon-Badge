@@ -595,6 +595,16 @@ describe('API response validation', () => {
 });
 
 describe('snapshot-first owner mode', () => {
+    // The fixture snapshot is valid from 2026-09-22 to 2026-10-22; fake only Date
+    // so waitFor keeps real timers.
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-10-01T00:00:00.000Z'));
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
     it('uses the published snapshot endpoint when mode is omitted', async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,

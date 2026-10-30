@@ -10,6 +10,11 @@ updates:
         dependency-type: production
       development-deps:
         dependency-type: development
+    ignore:
+      # TypeScript 7 breaks @rollup/plugin-typescript (ModuleKind.ES2015);
+      # take majors deliberately, not through grouped updates.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
