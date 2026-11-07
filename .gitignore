@@ -7,3 +7,4 @@ bun.lock
 .cursor/
 test-results/
 coverage
+_site
