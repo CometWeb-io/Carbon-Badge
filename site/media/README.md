@@ -34,3 +34,19 @@ page in estimate mode; no API or network score request was involved.
 Screenshots were converted from PNG to WebP with `cwebp -q 90 -m 6`.
 `../og.jpg` is a composed social card that reuses `badge-default-dark.webp`;
 its text and layout were written for the card and are not a capture.
+
+## Hero and logos (added 7 Nov 2026)
+
+- The hero is not a recording. It is a sketch of a website with the real
+  component, built from this repository, in its footer. The three numbers under
+  it (bytes, grams and grade) are read from that badge's `cometweb:badge-load`
+  event on every visit, so they describe the visitor's own load of this page.
+- Platform and browser logos (WordPress, Shopify, Webflow, Wix, HTML5, Google
+  Chrome, Firefox, Safari) are from Simple Icons 16.36.0 and belong to their
+  owners. The platforms match the website-builder guides in the README; they
+  are not endorsements. The browser logos stand for the Chromium, Firefox and
+  WebKit engines the Playwright suite runs in.
+- Figures in the strip under the hero, checked on 7 Nov 2026: `npx vitest run`
+  reported 296 tests, `npx playwright test --list` listed 84 browser tests
+  (28 per engine), and `node scripts/check-bundle-size.mjs` reported 10,585 B
+  gzip for the embed against a 10,700 B budget.

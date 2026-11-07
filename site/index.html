@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Carbon Badge — page-load CO₂e with the math shown</title>
+    <title>Carbon Badge — show the carbon cost of every page</title>
     <meta
       name="description"
       content="Open-source web component that estimates grams of CO₂e for a page load in the visitor's browser with the Sustainable Web Design Model v4, and shows N/D instead of guessing."
@@ -11,7 +11,7 @@
     <link rel="canonical" href="https://cometweb-io.github.io/Carbon-Badge/" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Carbon Badge — page-load CO₂e with the math shown" />
+    <meta property="og:title" content="Carbon Badge — show the carbon cost of every page" />
     <meta
       property="og:description"
       content="A web component that turns the bytes a page transferred into grams of CO₂e, in the visitor's browser. MIT-licensed."
@@ -1359,230 +1359,9 @@
           opacity: 0.25;
         }
       }
-      .m-stage {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 10px;
-        padding: 14px 22px 12px;
-        border-bottom: 1px solid var(--line-2);
-        background:
-          radial-gradient(ellipse 70% 90% at 50% 0%, rgba(163, 230, 189, 0.07), transparent 70%),
-          #121214;
-        transition: background 0.4s var(--ease);
-      }
-      .m-stage.light {
-        background: #f6f7f6;
-      }
-      .m-stage cometweb-carbon-badge {
-        justify-self: center;
-        max-width: 340px;
-      }
-      .m-controls {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 8px 14px;
-        font-size: 12px;
-        color: var(--muted);
-      }
-      .m-stage.light .m-controls {
-        color: #4b5563;
-      }
-      .seg {
-        display: inline-flex;
-        border: 1px solid var(--line-2);
-        border-radius: var(--r-tag);
-        overflow: hidden;
-        background: #0f0f10;
-      }
-      .m-stage.light .seg {
-        border-color: #d4d8d5;
-        background: #fff;
-      }
-      .seg button {
-        font: inherit;
-        font-family: var(--mono);
-        font-size: 11.5px;
-        color: var(--muted);
-        background: none;
-        border: 0;
-        padding: 5px 10px;
-        cursor: pointer;
-      }
-      .seg button + button {
-        border-left: 1px solid var(--line-2);
-      }
-      .m-stage.light .seg button + button {
-        border-left-color: #d4d8d5;
-      }
-      .seg button[aria-pressed="true"] {
-        color: #04140d;
-        background: var(--carbon);
-      }
-      .m-stage.light .seg button {
-        color: #4b5563;
-      }
-      .m-stage.light .seg button[aria-pressed="true"] {
-        color: #04140d;
-      }
-      .m-math {
-        list-style: none;
-        margin: 0;
-        padding: 6px 0;
-      }
-      .m-step {
-        display: grid;
-        grid-template-columns: 26px minmax(0, 1fr) auto;
-        align-items: baseline;
-        gap: 2px 12px;
-        padding: 8px 22px;
-        transition: opacity 0.45s var(--ease);
-      }
-      .m-step + .m-step {
-        border-top: 1px solid var(--line);
-      }
       .meter.waiting .m-step,
       .meter.playing .m-step:not(.on) {
         opacity: 0.38;
-      }
-      .m-step .n {
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--dim);
-      }
-      .m-step.on .n {
-        color: var(--carbon);
-      }
-      .m-step .t {
-        font-size: 14px;
-        color: var(--soft);
-      }
-      .m-step .t small {
-        display: block;
-        font-size: 12px;
-        color: var(--muted);
-      }
-      .m-step .v {
-        font-family: var(--mono);
-        font-size: 15px;
-        font-weight: 700;
-        color: var(--fg);
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-      }
-      .m-step .x {
-        grid-column: 2 / 4;
-        margin-top: 6px;
-      }
-      .files {
-        display: grid;
-        gap: 3px;
-      }
-      .files div {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 64px 58px;
-        align-items: center;
-        gap: 10px;
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--muted);
-        opacity: 0;
-        transform: translateY(4px);
-        transition:
-          opacity 0.35s var(--ease),
-          transform 0.35s var(--ease);
-      }
-      .files div.in {
-        opacity: 1;
-        transform: none;
-      }
-      .files span:first-child {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .files i {
-        display: block;
-        height: 5px;
-        border-radius: 3px;
-        background: #2a2a2d;
-        overflow: hidden;
-      }
-      .files i b {
-        display: block;
-        height: 100%;
-        width: 0;
-        border-radius: 3px;
-        background: var(--carbon);
-        transition: width 0.7s var(--ease);
-      }
-      .files em {
-        font-style: normal;
-        text-align: right;
-        color: var(--soft);
-      }
-      .coef {
-        display: flex;
-        height: 10px;
-        border-radius: 5px;
-        overflow: hidden;
-        background: #2a2a2d;
-        gap: 2px;
-      }
-      .coef span {
-        display: block;
-        height: 100%;
-        width: 0;
-        transition: width 0.5s var(--ease);
-      }
-      .coef .op {
-        background: var(--carbon);
-      }
-      .coef .em {
-        background: #5f8f74;
-      }
-      .coef-legend {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px 14px;
-        margin-top: 6px;
-        font-size: 11.5px;
-        color: var(--muted);
-      }
-      .coef-legend i {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 2px;
-        margin-right: 6px;
-      }
-      .bands {
-        position: relative;
-        display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-        gap: 2px;
-        padding-top: 18px;
-      }
-      .bands span {
-        height: 20px;
-        display: grid;
-        align-items: center;
-        justify-items: start;
-        padding-left: 7px;
-        font-size: 11px;
-        font-weight: 800;
-        color: rgba(0, 0, 0, 0.72);
-        opacity: 0.4;
-        transition: opacity 0.4s;
-      }
-      .bands span:first-child {
-        border-radius: 5px 0 0 5px;
-      }
-      .bands span:last-child {
-        border-radius: 0 5px 5px 0;
-      }
-      .bands span.hit {
-        opacity: 1;
       }
       .b-ap {
         background: #05f29b;
@@ -1601,76 +1380,6 @@
       }
       .b-f {
         background: #ef6b5b;
-      }
-      .bands .pin {
-        position: absolute;
-        top: 0;
-        left: 0;
-        transform: translateX(-50%);
-        font-family: var(--mono);
-        font-size: 10.5px;
-        color: var(--fg);
-        white-space: nowrap;
-        opacity: 0;
-        transition:
-          left 0.9s var(--ease),
-          opacity 0.3s;
-      }
-      .bands .pin::after {
-        content: "";
-        position: absolute;
-        left: 50%;
-        top: 14px;
-        width: 2px;
-        height: 28px;
-        margin-left: -1px;
-        border-radius: 1px;
-        background: var(--fg);
-        box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
-      }
-      .bands .pin.on {
-        opacity: 1;
-      }
-      .bands-scale {
-        display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-        margin-top: 5px;
-        font-family: var(--mono);
-        font-size: 10px;
-        color: var(--dim);
-      }
-      .m-foot {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 10px 22px 12px;
-        border-top: 1px solid var(--line);
-        font-size: 12.5px;
-        color: var(--muted);
-      }
-      .m-foot b {
-        color: var(--soft);
-        font-weight: 600;
-      }
-      .m-foot button {
-        flex: none;
-        font: inherit;
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--soft);
-        background: rgba(39, 39, 42, 0.52);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: var(--r-tag);
-        padding: 5px 10px;
-        cursor: pointer;
-      }
-      .m-foot button:hover {
-        color: var(--fg);
-        border-color: rgba(255, 255, 255, 0.26);
-      }
-      .m-foot button[hidden] {
-        display: none;
       }
 
       /* variants gallery */
@@ -1989,19 +1698,6 @@
         }
       }
       @media (max-width: 560px) {
-        .m-stage {
-          padding: 18px 14px 14px;
-        }
-        .m-step {
-          padding: 12px 14px;
-          grid-template-columns: 22px minmax(0, 1fr) auto;
-        }
-        .m-foot {
-          padding: 12px 14px 14px;
-        }
-        .files div {
-          grid-template-columns: minmax(0, 1fr) 40px 54px;
-        }
         .calc .cell {
           padding: 26px 20px;
         }
@@ -2020,40 +1716,249 @@
         .bandtable div:nth-child(n + 3) {
           border-top: 1px solid var(--line);
         }
-        .coef-legend {
-          font-size: 11px;
-        }
       }
       @media (prefers-reduced-motion: reduce) {
         .frame-bar .live::before {
           animation: none;
         }
-        .files div,
-        .files i b,
-        .coef span,
-        .bands .pin,
-        .m-step,
-        .m-stage {
-          transition: none;
-        }
-      }
-      .m-step small .lg {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 2px;
-        margin: 0 4px 0 0;
-      }
-      .lg.op {
-        background: var(--carbon);
-      }
-      .lg.em {
-        background: #5f8f74;
       }
       .gallery-wrap > p.note {
         margin: 16px 0 0;
         color: var(--dim);
         font-size: 13px;
+      }
+
+      /* ---------- hero: your site with the badge in its footer ---------- */
+      .works {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 18px;
+        margin-top: 26px;
+      }
+      .works-k {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      .lg-i {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--soft);
+      }
+      .lg-i svg {
+        width: 18px;
+        height: 18px;
+        fill: currentColor;
+      }
+      .site {
+        border: 1px solid var(--line-2);
+        border-radius: var(--r-panel);
+        background: #131315;
+        overflow: hidden;
+      }
+      .site-bar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .site-bar .dots {
+        display: inline-flex;
+        gap: 6px;
+      }
+      .site-bar .dots i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #2c2c30;
+      }
+      .site-bar .url {
+        flex: 1;
+        max-width: 260px;
+        margin: 0 auto;
+        padding: 3px 12px;
+        border-radius: var(--r-tag);
+        background: #1c1c1f;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        text-align: center;
+      }
+      .site-body {
+        padding: 22px 26px 26px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .site-body i,
+      .site-body span,
+      .site-body > div:not(.sk-nav):not(.sk-cards) {
+        display: block;
+        background: #1f1f23;
+        border-radius: 6px;
+      }
+      .sk-nav {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .sk-nav i {
+        width: 26px;
+        height: 26px;
+        border-radius: 8px !important;
+      }
+      .sk-nav span {
+        width: 46px;
+        height: 8px;
+      }
+      .sk-nav span:first-of-type {
+        margin-left: auto;
+      }
+      .sk-h {
+        width: 78%;
+        height: 18px;
+      }
+      .sk-h.short {
+        width: 52%;
+      }
+      .sk-p {
+        width: 64%;
+        height: 9px;
+        margin-top: 6px;
+      }
+      .sk-cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .sk-cards i {
+        height: 58px;
+        border-radius: 10px !important;
+      }
+      .site-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 22px;
+        border-top: 1px solid var(--line);
+        background: #0f0f11;
+      }
+      .foot-l {
+        font-size: 12px;
+        color: var(--dim);
+      }
+      .site-foot cometweb-carbon-badge {
+        display: block;
+        min-width: 0;
+      }
+      .eq {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1fr) 22px minmax(0, 0.8fr);
+        align-items: center;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      .eq-i {
+        padding: 14px 16px;
+        border: 1px solid var(--line-2);
+        border-radius: var(--r-panel);
+        background: var(--panel);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .eq-i b {
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        white-space: nowrap;
+      }
+      .eq-i span {
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .eq-i.grade b {
+        color: var(--accent);
+      }
+      .eq-arrow {
+        width: 22px;
+        height: 22px;
+        fill: none;
+        stroke: var(--dim);
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .meter .hero-note {
+        margin: 12px 0 0;
+        font-size: 13px;
+        color: var(--dim);
+        text-align: center;
+      }
+      .fact .n small {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--muted);
+        letter-spacing: 0;
+      }
+      .fact .d {
+        margin: -10px 0 0;
+        font-size: 13.5px;
+        line-height: 1.5;
+        color: var(--dim);
+      }
+      .fact .logos {
+        margin-top: -8px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+      .fact .logos svg {
+        width: 18px;
+        height: 18px;
+        fill: var(--soft);
+      }
+      .fact .logos span {
+        font-size: 12.5px;
+        color: var(--dim);
+      }
+      @media (max-width: 560px) {
+        .eq {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 6px;
+        }
+        .eq-arrow {
+          display: none;
+        }
+        .eq-i {
+          padding: 10px;
+        }
+        .eq-i b {
+          font-size: 18px;
+        }
+        .eq-i span {
+          font-size: 11px;
+        }
+        .site-body {
+          padding: 16px;
+        }
+        .site-foot {
+          flex-direction: column;
+          align-items: flex-start;
+        }
       }
     </style>
   </head>
@@ -2632,15 +2537,14 @@
         <div class="wrap">
           <div class="hero-copy">
             <div class="eyebrow hero-eyebrow">Open source · MIT · v2.0.6</div>
-            <h1>The carbon cost of a page load, with the math shown</h1>
+            <h1>Show the carbon cost of every page</h1>
             <p class="sub">
-              <b>A web component for your footer.</b> It reads what the page actually transferred in
-              the visitor's browser, turns bytes into grams of CO₂e with the Sustainable Web Design
-              Model v4, and shows N/D instead of guessing when the data is incomplete.
+              <b>Paste one tag into your footer.</b> The badge measures what each page actually loaded in the
+              visitor's browser and turns it into grams of CO₂e and a grade. No account, no cookies, no tracking.
             </p>
             <div class="ctas">
               <a class="btn btn-accent" href="#install">Add it to your site</a>
-              <a class="btn btn-light" href="#how">See how it is calculated</a>
+              <a class="btn btn-light" href="#demo">See it in action</a>
             </div>
             <div class="cmd">
               <span class="dot" aria-hidden="true"></span>
@@ -2649,94 +2553,42 @@
                 <svg aria-hidden="true"><use href="#i-copy" /></svg>
               </button>
             </div>
+            <div class="works">
+              <span class="works-k">Paste into</span>
+              <span class="lg-i" title="WordPress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.469 6.825c.84 1.537 1.318 3.3 1.318 5.175 0 3.979-2.156 7.456-5.363 9.325l3.295-9.527c.615-1.54.82-2.771.82-3.864 0-.405-.026-.78-.07-1.11m-7.981.105c.647-.03 1.232-.105 1.232-.105.582-.075.514-.93-.067-.899 0 0-1.755.135-2.88.135-1.064 0-2.85-.15-2.85-.15-.585-.03-.661.855-.075.885 0 0 .54.061 1.125.09l1.68 4.605-2.37 7.08L5.354 6.9c.649-.03 1.234-.1 1.234-.1.585-.075.516-.93-.065-.896 0 0-1.746.138-2.874.138-.2 0-.438-.008-.69-.015C4.911 3.15 8.235 1.215 12 1.215c2.809 0 5.365 1.072 7.286 2.833-.046-.003-.091-.009-.141-.009-1.06 0-1.812.923-1.812 1.914 0 .89.513 1.643 1.06 2.531.411.72.89 1.643.89 2.977 0 .915-.354 1.994-.821 3.479l-1.075 3.585-3.9-11.61.001.014zM12 22.784c-1.059 0-2.081-.153-3.048-.437l3.237-9.406 3.315 9.087c.024.053.05.101.078.149-1.12.393-2.325.609-3.582.609M1.211 12c0-1.564.336-3.05.935-4.39L7.29 21.709C3.694 19.96 1.212 16.271 1.211 12M12 0C5.385 0 0 5.385 0 12s5.385 12 12 12 12-5.385 12-12S18.615 0 12 0"/></svg>WordPress</span>
+              <span class="lg-i" title="Shopify"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.337 23.979l7.216-1.561s-2.604-17.613-2.625-17.73c-.018-.116-.114-.192-.211-.192s-1.929-.136-1.929-.136-1.275-1.274-1.439-1.411c-.045-.037-.075-.057-.121-.074l-.914 21.104h.023zM11.71 11.305s-.81-.424-1.774-.424c-1.447 0-1.504.906-1.504 1.141 0 1.232 3.24 1.715 3.24 4.629 0 2.295-1.44 3.76-3.406 3.76-2.354 0-3.54-1.465-3.54-1.465l.646-2.086s1.245 1.066 2.28 1.066c.675 0 .975-.545.975-.932 0-1.619-2.654-1.694-2.654-4.359-.034-2.237 1.571-4.416 4.827-4.416 1.257 0 1.875.361 1.875.361l-.945 2.715-.02.01zM11.17.83c.136 0 .271.038.405.135-.984.465-2.064 1.639-2.508 3.992-.656.213-1.293.405-1.889.578C7.697 3.75 8.951.84 11.17.84V.83zm1.235 2.949v.135c-.754.232-1.583.484-2.394.736.466-1.777 1.333-2.645 2.085-2.971.193.501.309 1.176.309 2.1zm.539-2.234c.694.074 1.141.867 1.429 1.755-.349.114-.735.231-1.158.366v-.252c0-.752-.096-1.371-.271-1.871v.002zm2.992 1.289c-.02 0-.06.021-.078.021s-.289.075-.714.21c-.423-1.233-1.176-2.37-2.508-2.37h-.115C12.135.209 11.669 0 11.265 0 8.159 0 6.675 3.877 6.21 5.846c-1.194.365-2.063.636-2.16.674-.675.213-.694.232-.772.87-.075.462-1.83 14.063-1.83 14.063L15.009 24l.927-21.166z"/></svg>Shopify</span>
+              <span class="lg-i" title="Webflow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m24 4.515-7.658 14.97H9.149l3.205-6.204h-.144C9.566 16.713 5.621 18.973 0 19.485v-6.118s3.596-.213 5.71-2.435H0V4.515h6.417v5.278l.144-.001 2.622-5.277h4.854v5.244h.144l2.72-5.244H24Z"/></svg>Webflow</span>
+              <span class="lg-i" title="Wix"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m0 7.354 2.113 9.292h.801a1.54 1.54 0 0 0 1.506-1.218l1.351-6.34a.171.171 0 0 1 .167-.137c.08 0 .15.058.167.137l1.352 6.34a1.54 1.54 0 0 0 1.506 1.218h.805l2.113-9.292h-.565c-.62 0-1.159.43-1.296 1.035l-1.26 5.545-1.106-5.176a1.76 1.76 0 0 0-2.19-1.324c-.639.176-1.113.716-1.251 1.365l-1.094 5.127-1.26-5.537A1.33 1.33 0 0 0 .563 7.354H0zm13.992 0a.951.951 0 0 0-.951.95v8.342h.635a.952.952 0 0 0 .951-.95V7.353h-.635zm1.778 0 3.158 4.66-3.14 4.632h1.325c.368 0 .712-.181.918-.486l1.756-2.59a.12.12 0 0 1 .197 0l1.754 2.59c.206.305.55.486.918.486h1.326l-3.14-4.632L24 7.354h-1.326c-.368 0-.712.181-.918.486l-1.772 2.617a.12.12 0 0 1-.197 0L18.014 7.84a1.108 1.108 0 0 0-.918-.486H15.77z"/></svg>Wix</span>
+              <span class="lg-i" title="Any HTML"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.5 0h21l-1.91 21.563L11.977 24l-8.564-2.438L1.5 0zm7.031 9.75l-.232-2.718 10.059.003.23-2.622L5.412 4.41l.698 8.01h9.126l-.326 3.426-2.91.804-2.955-.81-.188-2.11H6.248l.33 4.171L12 19.351l5.379-1.443.744-8.157H8.531z"/></svg>Any HTML</span>
+            </div>
           </div>
 
           <div class="meter waiting" id="meter">
-            <div class="frame">
-              <div class="frame-bar">
+            <div class="site">
+              <div class="site-bar">
                 <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-                <span class="live">this page, live</span>
+                <span class="url">your-site.example</span>
               </div>
-              <div class="m-stage" id="m-stage">
-                <cometweb-carbon-badge
-                  id="live-badge"
-                  mode="estimate"
-                  theme="dark"
-                  lang="en"
-                ></cometweb-carbon-badge>
-                <div class="m-controls">
-                  <span class="seg" role="group" aria-label="Badge variant">
-                    <button type="button" data-variant="default" aria-pressed="true">
-                      default</button
-                    ><button type="button" data-variant="compact" aria-pressed="false">
-                      compact</button
-                    ><button type="button" data-variant="minimal" aria-pressed="false">
-                      minimal
-                    </button>
-                  </span>
-                  <span class="seg" role="group" aria-label="Badge theme">
-                    <button type="button" data-theme="dark" aria-pressed="true">dark</button
-                    ><button type="button" data-theme="light" aria-pressed="false">light</button>
-                  </span>
-                </div>
+              <div class="site-body" aria-hidden="true">
+                <div class="sk-nav"><i></i><span></span><span></span><span></span></div>
+                <div class="sk-h"></div>
+                <div class="sk-h short"></div>
+                <div class="sk-p"></div>
+                <div class="sk-cards"><i></i><i></i><i></i></div>
               </div>
-              <ol class="m-math" aria-live="polite">
-                <li class="m-step" data-s="1">
-                  <span class="n">01</span>
-                  <span class="t" id="m-bytes-t"
-                    >Bytes this page transferred<small id="m-bytes-s"
-                      >Waiting for the page to go quiet…</small
-                    ></span
-                  >
-                  <span class="v" id="m-bytes">–</span>
-                  <div class="x files" id="m-files"></div>
-                </li>
-                <li class="m-step" data-s="2">
-                  <span class="n">02</span>
-                  <span class="t"
-                    >× 0.300 kWh per GB<small
-                      ><i class="lg op"></i>use 0.194 <i class="lg em"></i>manufacture 0.106 ·
-                      data centre, network, device</small
-                    ></span
-                  >
-                  <span class="v" id="m-energy">–</span>
-                  <div class="x">
-                    <div class="coef" aria-hidden="true">
-                      <span class="op" data-w="18.33"></span><span class="op" data-w="19.67"></span
-                      ><span class="op" data-w="26.67"></span><span class="em" data-w="4"></span
-                      ><span class="em" data-w="4.33"></span><span class="em" data-w="27"></span>
-                    </div>
-                  </div>
-                </li>
-                <li class="m-step" data-s="3">
-                  <span class="n">03</span>
-                  <span class="t">× 494 g CO₂e per kWh<small>Global average grid; the badge rounds to 0.01 g</small></span>
-                  <span class="v" id="m-grams">–</span>
-                </li>
-                <li class="m-step" data-s="4">
-                  <span class="n">04</span>
-                  <span class="t">CometWeb Score<small id="m-band-s">Fixed bands per page load</small></span>
-                  <span class="v" id="m-band">–</span>
-                  <div class="x">
-                    <div class="bands" aria-hidden="true">
-                      <span class="pin" id="m-pin"></span>
-                      <span class="b-ap">A+</span><span class="b-a">A</span><span class="b-b">B</span
-                      ><span class="b-c">C</span><span class="b-d">D</span><span class="b-f">F</span>
-                    </div>
-                    <div class="bands-scale" aria-hidden="true">
-                      <span>0</span><span>0.10</span><span>0.20</span><span>0.40</span
-                      ><span>0.70</span><span>1.00 g</span>
-                    </div>
-                  </div>
-                </li>
-              </ol>
-              <div class="m-foot">
-                <span id="m-note"
-                  >The real component, built from this repository, measuring this page now.</span
-                >
-                <button type="button" id="m-replay" hidden>Replay</button>
+              <div class="site-foot" id="m-stage">
+                <span class="foot-l" aria-hidden="true">© Your company</span>
+                <cometweb-carbon-badge id="live-badge" mode="estimate" theme="dark" lang="en"></cometweb-carbon-badge>
               </div>
             </div>
+            <div class="eq" aria-live="polite">
+              <div class="eq-i"><b id="m-bytes">–</b><span id="m-bytes-s">loaded by this page</span></div>
+              <svg class="eq-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+              <div class="eq-i"><b id="m-grams">–</b><span>CO₂e per page load</span></div>
+              <svg class="eq-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+              <div class="eq-i grade"><b id="m-band">–</b><span id="m-band-s">grade</span></div>
+            </div>
+            <p class="hero-note" id="m-note">The real badge, measuring this page in your browser right now.</p>
           </div>
         </div>
       </div>
@@ -2744,32 +2596,28 @@
       <div class="facts">
         <div class="wrap">
           <div class="fact">
-            <div class="fico">
-              <svg aria-hidden="true"><use href="#i-package" /></svg>
-            </div>
+            <div class="fico"><svg aria-hidden="true"><use href="#i-lock" /></svg></div>
             <div class="n">0</div>
-            <div class="k">Runtime dependencies</div>
+            <div class="k">Cookies, storage or API calls</div>
+            <p class="d">The default badge measures in the visitor's browser and sends nothing anywhere.</p>
           </div>
           <div class="fact">
-            <div class="fico">
-              <svg aria-hidden="true"><use href="#i-gauge" /></svg>
-            </div>
-            <div class="n">10.7<sup>kB</sup></div>
-            <div class="k">Gzip budget, enforced in CI</div>
+            <div class="fico"><svg aria-hidden="true"><use href="#i-gauge" /></svg></div>
+            <div class="n">10.6<small> kB</small></div>
+            <div class="k">Gzip, budget enforced in CI</div>
+            <p class="d">10,585 bytes for the embed. A build over 10,700 fails.</p>
           </div>
           <div class="fact">
-            <div class="fico">
-              <svg aria-hidden="true"><use href="#i-lock" /></svg>
-            </div>
+            <div class="fico"><svg aria-hidden="true"><use href="#i-check-circle" /></svg></div>
+            <div class="n">380</div>
+            <div class="k">Tests on every change</div>
+            <div class="logos"><svg viewBox="0 0 24 24" aria-label="Chromium"><path d="M12 0C8.21 0 4.831 1.757 2.632 4.501l3.953 6.848A5.454 5.454 0 0 1 12 6.545h10.691A12 12 0 0 0 12 0zM1.931 5.47A11.943 11.943 0 0 0 0 12c0 6.012 4.42 10.991 10.189 11.864l3.953-6.847a5.45 5.45 0 0 1-6.865-2.29zm13.342 2.166a5.446 5.446 0 0 1 1.45 7.09l.002.001h-.002l-5.344 9.257c.206.01.413.016.621.016 6.627 0 12-5.373 12-12 0-1.54-.29-3.011-.818-4.364zM12 16.364a4.364 4.364 0 1 1 0-8.728 4.364 4.364 0 0 1 0 8.728Z"/></svg><svg viewBox="0 0 24 24" aria-label="Firefox"><path d="M8.824 7.287c.008 0 .004 0 0 0zm-2.8-1.4c.006 0 .003 0 0 0zm16.754 2.161c-.505-1.215-1.53-2.528-2.333-2.943.654 1.283 1.033 2.57 1.177 3.53l.002.02c-1.314-3.278-3.544-4.6-5.366-7.477-.091-.147-.184-.292-.273-.446a3.545 3.545 0 01-.13-.24 2.118 2.118 0 01-.172-.46.03.03 0 00-.027-.03.038.038 0 00-.021 0l-.006.001a.037.037 0 00-.01.005L15.624 0c-2.585 1.515-3.657 4.168-3.932 5.856a6.197 6.197 0 00-2.305.587.297.297 0 00-.147.37c.057.162.24.24.396.17a5.622 5.622 0 012.008-.523l.067-.005a5.847 5.847 0 011.957.222l.095.03a5.816 5.816 0 01.616.228c.08.036.16.073.238.112l.107.055a5.835 5.835 0 01.368.211 5.953 5.953 0 012.034 2.104c-.62-.437-1.733-.868-2.803-.681 4.183 2.09 3.06 9.292-2.737 9.02a5.164 5.164 0 01-1.513-.292 4.42 4.42 0 01-.538-.232c-1.42-.735-2.593-2.121-2.74-3.806 0 0 .537-2 3.845-2 .357 0 1.38-.998 1.398-1.287-.005-.095-2.029-.9-2.817-1.677-.422-.416-.622-.616-.8-.767a3.47 3.47 0 00-.301-.227 5.388 5.388 0 01-.032-2.842c-1.195.544-2.124 1.403-2.8 2.163h-.006c-.46-.584-.428-2.51-.402-2.913-.006-.025-.343.176-.389.206-.406.29-.787.616-1.136.974-.397.403-.76.839-1.085 1.303a9.816 9.816 0 00-1.562 3.52c-.003.013-.11.487-.19 1.073-.013.09-.026.181-.037.272a7.8 7.8 0 00-.069.667l-.002.034-.023.387-.001.06C.386 18.795 5.593 24 12.016 24c5.752 0 10.527-4.176 11.463-9.661.02-.149.035-.298.052-.448.232-1.994-.025-4.09-.753-5.844z"/></svg><svg viewBox="0 0 24 24" aria-label="WebKit"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm-.004.953h.006c.063 0 .113.05.113.113v1.842c0 .063-.05.113-.113.113h-.006a.112.112 0 0 1-.113-.113V1.066c0-.063.05-.113.113-.113zm-.941.041c.056.001.104.046.11.104l.077.918a.112.112 0 0 1-.101.12h-.01a.11.11 0 0 1-.12-.1l-.08-.919a.112.112 0 0 1 .102-.12h.01l.012-.003zm1.892 0H12.965a.113.113 0 0 1 .103.121l-.08.92a.111.111 0 0 1-.12.102h-.009a.111.111 0 0 1-.101-.121l.078-.92a.112.112 0 0 1 .111-.102zm-2.838.123a.11.11 0 0 1 .106.092l.32 1.818c.01.06-.03.119-.09.13l-.01.001a.111.111 0 0 1-.128-.09l-.32-1.818a.111.111 0 0 1 .09-.129l.01-.002a.103.103 0 0 1 .022-.002zm3.784.002h.021l.008.002c.061.01.102.07.092.131l-.32 1.814c-.011.062-.07.101-.132.09h-.005a.113.113 0 0 1-.092-.13l.32-1.815a.111.111 0 0 1 .108-.092zm-4.715.203c.048.002.09.035.103.084l.239.893a.112.112 0 0 1-.079.139l-.005.001a.114.114 0 0 1-.14-.08l-.237-.894a.11.11 0 0 1 .078-.137l.006-.002a.123.123 0 0 1 .035-.004zm5.644 0a.11.11 0 0 1 .033.004l.006.002c.06.016.097.079.08.139l-.24.892a.112.112 0 0 1-.137.08l-.005-.002a.114.114 0 0 1-.08-.138l.24-.893a.112.112 0 0 1 .103-.084zm-6.562.285a.11.11 0 0 1 .107.073L9 3.42a.107.107 0 0 1-.064.139l-.012.005a.11.11 0 0 1-.14-.066L8.15 1.76a.11.11 0 0 1 .065-.14l.014-.005a.106.106 0 0 1 .03-.008zm7.469.002c.014 0 .028.001.042.006l.012.006c.057.02.087.082.067.139l-.633 1.738a.11.11 0 0 1-.14.066l-.013-.003A.11.11 0 0 1 15 3.42l.633-1.738a.108.108 0 0 1 .096-.073zm-8.352.366a.112.112 0 0 1 .105.064l.393.838a.112.112 0 0 1-.055.148l-.008.004a.11.11 0 0 1-.146-.054l-.395-.838a.112.112 0 0 1 .055-.149l.008-.004a.11.11 0 0 1 .043-.01zm9.246 0a.11.11 0 0 1 .043.01l.006.003a.11.11 0 0 1 .053.149l-.391.838a.112.112 0 0 1-.148.054l-.006-.002a.112.112 0 0 1-.055-.148l.393-.84a.112.112 0 0 1 .105-.064zm-10.092.44c.04-.002.08.018.102.056l.922 1.597a.113.113 0 0 1-.041.155l-.006.002a.113.113 0 0 1-.154-.041l-.922-1.598a.113.113 0 0 1 .04-.154l.007-.002a.11.11 0 0 1 .052-.016zm10.94.001c.018 0 .035.004.052.014l.004.002a.114.114 0 0 1 .041.156l-.923 1.596a.114.114 0 0 1-.157.04l-.004-.001a.112.112 0 0 1-.04-.155l.925-1.595a.113.113 0 0 1 .102-.057zM5.729 2.93a.11.11 0 0 1 .093.047l.532.753a.114.114 0 0 1-.028.159l-.004.002a.114.114 0 0 1-.158-.028l-.531-.752a.114.114 0 0 1 .027-.158l.006-.002a.113.113 0 0 1 .063-.021zm12.542 0a.11.11 0 0 1 .063.02l.006.003a.112.112 0 0 1 .027.156l-.531.756a.112.112 0 0 1-.156.028l-.006-.004a.112.112 0 0 1-.028-.157l.532-.755a.11.11 0 0 1 .093-.047zm.747.578a.11.11 0 0 1 .08.027l.006.004c.047.04.053.111.013.158L17.932 5.11a.11.11 0 0 1-.157.016l-.005-.006a.11.11 0 0 1-.014-.156l1.185-1.414a.114.114 0 0 1 .077-.041zM4.984 3.51a.11.11 0 0 1 .077.039L6.244 4.96a.112.112 0 0 1-.014.158l-.003.004a.112.112 0 0 1-.159-.014L4.883 3.697a.112.112 0 0 1 .013-.158l.006-.004a.111.111 0 0 1 .082-.025zm-.714.64c.027 0 .055.01.076.032l.658.66a.107.107 0 0 1 0 .152l-.01.01a.107.107 0 0 1-.152 0l-.66-.658a.11.11 0 0 1 0-.155l.01-.01a.111.111 0 0 1 .078-.03zm15.462 0c.028 0 .055.01.077.032l.007.007a.109.109 0 0 1 0 .155l-.658.66a.109.109 0 0 1-.154 0l-.008-.008a.109.109 0 0 1 0-.154l.658-.66a.11.11 0 0 1 .078-.032zm.707.66c.038 0 .071.02.092.075a.112.112 0 0 1-.023.117l-7.606 8.08c-3.084 2.024-6.149 4.04-9.222 6.05-.078.051-.17.082-.211-.028a.112.112 0 0 1 .023-.118l7.594-8.08c3.084-2.023 6.161-4.039 9.234-6.049a.247.247 0 0 1 .12-.046zm-16.824.045a.109.109 0 0 1 .08.026l1.416 1.187a.11.11 0 0 1 .014.157l-.006.005a.11.11 0 0 1-.156.014L3.549 5.057a.109.109 0 0 1-.014-.155l.006-.007a.108.108 0 0 1 .074-.04zm17.336.756c.036 0 .072.017.094.05l.004.003a.114.114 0 0 1-.028.158l-.753.53a.112.112 0 0 1-.157-.028l-.004-.004a.114.114 0 0 1 .028-.158l.754-.53a.113.113 0 0 1 .062-.02zm-17.904.002c.02 0 .042.007.06.02l.76.531c.05.035.06.103.026.152l-.006.01a.109.109 0 0 1-.153.026l-.76-.532a.109.109 0 0 1-.025-.152l.006-.01a.108.108 0 0 1 .092-.045zm-.512.803c.018 0 .036.006.053.016l1.596.923a.111.111 0 0 1 .04.153l-.003.006a.111.111 0 0 1-.153.04L2.473 6.63a.111.111 0 0 1-.041-.152l.004-.006a.11.11 0 0 1 .1-.055zm18.932 0a.11.11 0 0 1 .1.055l.001.004a.113.113 0 0 1-.04.154l-1.596.926a.113.113 0 0 1-.155-.041l-.002-.004a.113.113 0 0 1 .041-.155l1.596-.925a.115.115 0 0 1 .055-.014zm-19.373.846c.014 0 .029.003.043.01l.838.392a.11.11 0 0 1 .052.147l-.004.01a.11.11 0 0 1-.146.052l-.838-.393a.11.11 0 0 1-.053-.146l.004-.01a.109.109 0 0 1 .104-.062zm19.81.002a.11.11 0 0 1 .106.062l.002.008a.11.11 0 0 1-.053.146l-.838.393a.11.11 0 0 1-.146-.053l-.004-.008a.11.11 0 0 1 .052-.146l.838-.393a.11.11 0 0 1 .043-.01zm-20.183.88c.014 0 .028.001.043.006l1.732.631a.112.112 0 0 1 .067.145l-.002.006a.11.11 0 0 1-.143.066l-1.732-.63a.113.113 0 0 1-.069-.145l.002-.004a.115.115 0 0 1 .102-.074zm20.549 0a.113.113 0 0 1 .11.075l.003.004a.115.115 0 0 1-.069.146l-1.732.629a.112.112 0 0 1-.145-.066l-.001-.006a.113.113 0 0 1 .068-.145l1.732-.63a.11.11 0 0 1 .034-.006zm-20.836.909a.11.11 0 0 1 .033.004l.892.24c.06.016.096.077.08.137l-.002.007a.11.11 0 0 1-.136.079l-.895-.239a.113.113 0 0 1-.078-.138l.002-.006a.113.113 0 0 1 .104-.084zm21.13.002a.115.115 0 0 1 .106.084v.004a.112.112 0 0 1-.078.138l-.893.239a.112.112 0 0 1-.138-.079v-.005a.112.112 0 0 1 .078-.14l.892-.237a.11.11 0 0 1 .033-.004zm-21.335.93.023.001 1.814.323c.062.01.101.069.09.13v.006a.111.111 0 0 1-.13.09l-1.815-.322a.113.113 0 0 1-.092-.131l.002-.006a.11.11 0 0 1 .108-.092zm21.519.001h.022c.052.002.1.038.109.092v.006c.01.062-.03.12-.092.13l-1.814.321a.113.113 0 0 1-.131-.092v-.005a.113.113 0 0 1 .092-.131l1.814-.32zm-21.644.944h.011l.922.084a.11.11 0 0 1 .102.119l-.002.01a.11.11 0 0 1-.121.1l-.922-.083a.11.11 0 0 1-.1-.12v-.009a.111.111 0 0 1 .11-.101zm21.779.002h.012c.056 0 .106.043.11.101v.008a.111.111 0 0 1-.1.121l-.923.08a.111.111 0 0 1-.12-.101v-.008a.111.111 0 0 1 .1-.121l.92-.08zm-11.82.73L6.091 16.95c2.02-1.324 4.039-2.646 6.066-3.976l-1.095-1.31zm11.87.219c.063 0 .114.05.114.113v.004c0 .063-.05.113-.113.113l-1.844.004a.113.113 0 0 1-.113-.113v-.004c0-.063.05-.113.113-.113l1.844-.004zm-21.869.002h1.844c.062 0 .112.05.112.111v.008c0 .062-.05.111-.112.111H1.064a.111.111 0 0 1-.11-.111v-.008c0-.061.049-.111.11-.111zm.952.875h.011a.11.11 0 0 1 .11.101v.006a.111.111 0 0 1-.102.121l-.922.08a.11.11 0 0 1-.119-.101l-.002-.006a.111.111 0 0 1 .102-.121l.922-.08zm19.955 0h.011l.922.08a.11.11 0 0 1 .102.119v.008a.112.112 0 0 1-.121.101l-.922-.08a.11.11 0 0 1-.102-.119v-.008a.111.111 0 0 1 .11-.101zm-18.924.705c.053.001.098.04.107.094l.002.004c.011.061-.03.12-.092.13l-1.812.32a.113.113 0 0 1-.13-.091v-.004a.115.115 0 0 1 .09-.133l1.811-.318a.117.117 0 0 1 .024-.002zm17.902 0c.008 0 .016 0 .024.002l1.816.32c.061.011.1.07.09.131v.004a.113.113 0 0 1-.131.092l-1.816-.32a.112.112 0 0 1-.09-.131v-.004a.113.113 0 0 1 .107-.094zM2.332 14.477a.11.11 0 0 1 .104.082l.002.005c.016.06-.02.121-.08.137l-.891.24a.112.112 0 0 1-.137-.08l-.002-.006a.112.112 0 0 1 .08-.136l.89-.239a.112.112 0 0 1 .034-.003zm19.332 0c.011 0 .024 0 .035.003l.893.239c.06.016.096.077.08.136l-.002.006a.111.111 0 0 1-.137.078l-.894-.238a.111.111 0 0 1-.078-.137l.002-.005a.109.109 0 0 1 .101-.082zm-18.213.517a.11.11 0 0 1 .11.074l.002.004a.112.112 0 0 1-.067.145l-1.732.63a.113.113 0 0 1-.145-.068l-.002-.004a.113.113 0 0 1 .069-.144L3.418 15a.11.11 0 0 1 .033-.006zm17.086 0c.015 0 .029 0 .043.006l1.734.63a.111.111 0 0 1 .067.143l-.002.008a.111.111 0 0 1-.143.067l-1.734-.631a.111.111 0 0 1-.066-.143l.002-.008a.111.111 0 0 1 .1-.072zM2.92 16.117a.109.109 0 0 1 .103.063l.004.01a.108.108 0 0 1-.052.144l-.838.393a.11.11 0 0 1-.147-.055l-.004-.008a.11.11 0 0 1 .053-.146l.838-.391a.112.112 0 0 1 .043-.01zm18.158 0a.11.11 0 0 1 .043.01l.838.39c.056.027.08.093.055.149l-.002.004a.112.112 0 0 1-.149.055l-.838-.391a.112.112 0 0 1-.054-.148l.002-.004a.112.112 0 0 1 .105-.065zm-16.957.315c.04-.001.078.02.1.056l.004.004a.11.11 0 0 1-.041.153l-1.596.921a.113.113 0 0 1-.154-.04l-.002-.005a.113.113 0 0 1 .04-.154l1.596-.922a.109.109 0 0 1 .053-.013zm15.756 0c.018 0 .036.004.053.013l1.597.924a.11.11 0 0 1 .041.152l-.002.004a.11.11 0 0 1-.152.041l-1.598-.921a.113.113 0 0 1-.04-.155l.001-.002a.111.111 0 0 1 .1-.056zm.328 1.193a.11.11 0 0 1 .06.021l.758.534c.05.035.061.102.026.152l-.004.008a.111.111 0 0 1-.154.027l-.756-.535a.109.109 0 0 1-.028-.152l.006-.008a.11.11 0 0 1 .092-.047zm-16.412.002c.035 0 .072.016.094.047l.004.008a.109.109 0 0 1-.028.152l-.756.531a.108.108 0 0 1-.152-.025l-.006-.008a.109.109 0 0 1 .028-.152l.755-.534a.107.107 0 0 1 .061-.019zm15.162.102a.112.112 0 0 1 .082.025l1.414 1.187a.11.11 0 0 1 .014.157l-.004.004a.113.113 0 0 1-.158.013L18.89 17.93a.11.11 0 0 1-.014-.157l.004-.005a.108.108 0 0 1 .074-.04zm-12.812 1.12a.11.11 0 0 1 .08.026l.007.008a.11.11 0 0 1 .014.154L5.06 20.451a.11.11 0 0 1-.155.012l-.008-.006a.11.11 0 0 1-.013-.154l1.185-1.414a.11.11 0 0 1 .075-.04zm11.703 0c.032 0 .065.015.088.042l1.181 1.41c.04.048.035.12-.013.16l-.002.002a.114.114 0 0 1-.16-.014l-1.182-1.41a.114.114 0 0 1 .013-.16l.002-.002a.115.115 0 0 1 .073-.027zm-12.928.114c.027 0 .054.01.074.031l.014.012a.107.107 0 0 1 0 .15l-.662.66a.105.105 0 0 1-.149 0l-.011-.011a.105.105 0 0 1 0-.149l.66-.662a.105.105 0 0 1 .074-.031zm14.164 0c.027 0 .053.01.074.031l.66.662a.106.106 0 0 1 0 .15l-.011.012a.106.106 0 0 1-.15-.002l-.66-.66a.106.106 0 0 1 .001-.15l.01-.012a.108.108 0 0 1 .076-.031zm-11.627.797c.018 0 .034.006.05.015l.007.004a.11.11 0 0 1 .04.15l-.921 1.598a.11.11 0 0 1-.15.041l-.008-.004a.111.111 0 0 1-.04-.152l.922-1.596a.113.113 0 0 1 .1-.056zm9.088.002a.11.11 0 0 1 .1.054l.925 1.596a.113.113 0 0 1-.04.154h-.005a.11.11 0 0 1-.152-.039l-.926-1.595a.113.113 0 0 1 .041-.155l.004-.002a.108.108 0 0 1 .053-.013zm-10.285.324c.021 0 .043.008.062.021l.004.002c.051.036.063.106.028.157l-.53.755a.112.112 0 0 1-.156.028l-.004-.002a.112.112 0 0 1-.027-.156l.53-.756a.113.113 0 0 1 .093-.05zm11.484.002c.036 0 .072.015.094.047l.53.756c.035.05.023.12-.028.156l-.004.002a.112.112 0 0 1-.156-.028l-.53-.755a.112.112 0 0 1 .028-.157l.004-.002a.112.112 0 0 1 .062-.02zm-8.863.342a.11.11 0 0 1 .043.006l.012.005c.056.02.084.081.064.137l-.633 1.74a.105.105 0 0 1-.136.063l-.014-.004a.106.106 0 0 1-.065-.137l.633-1.74a.107.107 0 0 1 .096-.07zm6.232 0a.107.107 0 0 1 .106.07l.633 1.738a.107.107 0 0 1-.065.137l-.015.006a.107.107 0 0 1-.137-.065L15 20.578a.107.107 0 0 1 .064-.137l.014-.005a.117.117 0 0 1 .033-.006zm-4.695.41c.008 0 .014 0 .021.002l.006.002c.062.01.101.067.09.129l-.318 1.812a.113.113 0 0 1-.131.092l-.004-.002a.111.111 0 0 1-.092-.129l.32-1.812a.113.113 0 0 1 .108-.094zm3.146.002c.008-.002.015 0 .022 0a.111.111 0 0 1 .107.092l.32 1.812c.012.061-.03.12-.091.131l-.004.002a.113.113 0 0 1-.13-.092l-.321-1.812a.113.113 0 0 1 .092-.131l.005-.002zm-5.79.119a.11.11 0 0 1 .042.01l.004.002a.114.114 0 0 1 .055.15l-.393.834a.112.112 0 0 1-.148.055l-.004-.002a.112.112 0 0 1-.055-.149l.393-.836a.112.112 0 0 1 .105-.064zm8.458 0a.108.108 0 0 1 .104.062l.39.84a.11.11 0 0 1-.052.147l-.008.004a.11.11 0 0 1-.146-.055l-.391-.838a.11.11 0 0 1 .053-.146l.008-.004a.11.11 0 0 1 .042-.01zm-4.236.018H12c.063 0 .115.05.115.113l.002 1.84c0 .063-.05.113-.113.113h-.006a.113.113 0 0 1-.113-.113l-.004-1.838c0-.063.05-.115.113-.115zm-2.592.578c.011 0 .022 0 .034.004l.005.002c.06.016.095.077.079.136l-.24.893a.111.111 0 0 1-.137.078l-.006-.002a.111.111 0 0 1-.078-.137l.24-.89a.113.113 0 0 1 .103-.084zm5.196.002a.11.11 0 0 1 .103.082l.24.89a.11.11 0 0 1-.078.137l-.006.002a.11.11 0 0 1-.136-.078l-.24-.89a.11.11 0 0 1 .078-.138l.005-.002a.112.112 0 0 1 .034-.003zm-3.475.302h.01l.008.002c.061.006.107.06.101.121l-.08.92a.112.112 0 0 1-.121.102h-.008a.11.11 0 0 1-.1-.121l.08-.922a.111.111 0 0 1 .11-.102zm1.736 0h.02a.11.11 0 0 1 .107.102l.08.924a.11.11 0 0 1-.101.119l-.008.002a.11.11 0 0 1-.12-.102l-.08-.924a.112.112 0 0 1 .102-.12z"/></svg><span>296 unit + 84 in 3 browsers</span></div>
+          </div>
+          <div class="fact">
+            <div class="fico"><svg aria-hidden="true"><use href="#i-eye-off" /></svg></div>
             <div class="n">0</div>
-            <div class="k">Cookies or storage by default</div>
-          </div>
-          <div class="fact">
-            <div class="fico">
-              <svg aria-hidden="true"><use href="#i-palette" /></svg>
-            </div>
-            <div class="n">6</div>
-            <div class="k">Looks · 3 variants × 2 themes</div>
+            <div class="k">Guessed numbers</div>
+            <p class="d">When a file hides its size, the badge shows a floor or N/D, never a grade.</p>
           </div>
         </div>
       </div>
@@ -2779,11 +2627,10 @@
           <div class="sec-head center reveal">
             <div>
               <div class="eyebrow">Recorded, not mocked up</div>
-              <h2>One tag, one measurement, six looks</h2>
+              <h2>One tag, three looks, light or dark</h2>
             </div>
             <p>
-              The badge measures once, after the page goes quiet. Switching variant or theme only
-              redraws it. A client-side route change throws the old number away.
+              Pick the style that fits your footer. The number stays the same: the badge measures once, after the page has finished loading.
             </p>
           </div>
           <div class="frame demo-frame reveal">
@@ -2904,12 +2751,10 @@
           <div class="sec-head reveal">
             <div>
               <div class="eyebrow">Fail closed</div>
-              <h2>A grade only when every byte was visible</h2>
+              <h2>It never guesses</h2>
             </div>
             <p>
-              Browsers hide the size of cross-origin files unless the server sends
-              <b>Timing-Allow-Origin</b>. Hidden bytes can only make the real number higher, so the
-              badge never turns a partial count into a letter.
+              Some files, such as third-party scripts, hide their size from the browser. Then the badge shows “at least” a number, or N/D, instead of a grade it cannot back up.
             </p>
           </div>
           <div class="cells grid-3 reveal" style="grid-template-columns: repeat(3, minmax(0, 1fr))">
@@ -2976,12 +2821,10 @@
           <div class="sec-head reveal">
             <div>
               <div class="eyebrow">SWD Model v4</div>
-              <h2>From bytes to grams, in the open</h2>
+              <h2>Bytes in, grams out</h2>
             </div>
             <p>
-              The estimate multiplies the bytes the browser reported by a fixed energy intensity per
-              gigabyte and a global grid factor. <b>The only input that changes is bytes.</b> Drag
-              the slider to see what that means for a page.
+              The badge multiplies the data your page loaded by a fixed energy figure and the global average grid. Drag the slider to see how page weight changes the grade.
             </p>
           </div>
           <div class="cells calc reveal">
@@ -3082,8 +2925,7 @@ data_GB = bytes / 1,000,000,000</pre
               <h2>Local by default, published when you choose</h2>
             </div>
             <p>
-              Estimate mode needs no account and sends no measurement anywhere. The two network modes
-              read a result that was already published in CometWeb Insight; they never start a scan.
+              By default everything happens in the visitor’s browser. If you use CometWeb Insight, the badge can show a result you published there instead. It never starts a scan.
             </p>
           </div>
           <div class="vtable reveal" role="table" aria-label="Badge modes">
@@ -3147,8 +2989,7 @@ data_GB = bytes / 1,000,000,000</pre
               <h2>Paste it once, see it on the next load</h2>
             </div>
             <p>
-              No account, API key or URL setup. The script is pinned to an exact version with a
-              Subresource Integrity hash, so the browser refuses a modified file.
+              No account or API key. The script is pinned to one exact version, so the browser refuses a file that was changed.
             </p>
           </div>
           <div class="cells grid-3 reveal" style="grid-template-columns: repeat(3, minmax(0, 1fr))">
@@ -3226,8 +3067,7 @@ import '@cometweb/carbon-badge/embed';</div>
               <h2>Small enough to read, tested in three engines</h2>
             </div>
             <p>
-              The component is MIT-licensed TypeScript with no runtime dependencies. Pull requests
-              and npm releases run the same gates: audit, types, tests, size and provenance.
+              Open TypeScript under MIT with no dependencies. Every change and every release goes through the same checks: tests, types, size and a security audit.
             </p>
           </div>
           <div class="cells grid-3 reveal" style="grid-template-columns: repeat(3, minmax(0, 1fr))">
@@ -3484,21 +3324,10 @@ import '@cometweb/carbon-badge/embed';</div>
           copy(this, SNIPPET);
         });
 
-        /* ---------- hero: the live badge and its arithmetic ---------- */
+        /* ---------- hero: the live badge, and its three numbers ---------- */
         var meter = $("meter");
-        var stage = $("m-stage");
         var badge = $("live-badge");
-        var steps = Array.prototype.slice.call(meter.querySelectorAll(".m-step"));
-        var coef = Array.prototype.slice.call(meter.querySelectorAll(".coef span"));
-        var bandEls = Array.prototype.slice.call(meter.querySelectorAll(".bands span:not(.pin)"));
-        var pin = $("m-pin");
-        var replay = $("m-replay");
-        var timers = [];
         var result = null;
-
-        function at(ms, fn) {
-          timers.push(setTimeout(fn, reduce ? 0 : ms));
-        }
         function count(el, to, ms, fmt) {
           if (reduce) {
             el.textContent = fmt(to);
@@ -3511,160 +3340,42 @@ import '@cometweb/carbon-badge/embed';</div>
             if (k < 1) requestAnimationFrame(step);
           })(t0);
         }
-        function on(i) {
-          steps.forEach(function (s, k) {
-            s.classList.toggle("on", k <= i);
-          });
-        }
-
-        /* The page's own timing entries, up to the moment the badge measured. */
-        function fileRows(cutoff) {
-          var list = [];
-          try {
-            var nav = performance.getEntriesByType("navigation")[0];
-            if (nav) list.push({ name: "index.html", size: nav.transferSize || 0 });
-            performance.getEntriesByType("resource").forEach(function (e) {
-              if (cutoff && e.startTime > cutoff) return;
-              var path = e.name.split("?")[0].split("/");
-              list.push({ name: path.slice(-2).join("/"), size: e.transferSize || 0 });
-            });
-          } catch (err) {
-            return [];
-          }
-          list.sort(function (a, b) {
-            return b.size - a.size;
-          });
-          return list;
-        }
-        function paintFiles(cutoff) {
-          var box = $("m-files");
-          var rows = fileRows(cutoff);
-          var top = rows.slice(0, 2);
-          var max = top.length ? top[0].size || 1 : 1;
-          box.innerHTML = "";
-          top.forEach(function (r) {
-            var d = document.createElement("div");
-            d.innerHTML =
-              "<span></span><i><b></b></i><em>" + (r.size ? kb(r.size) : "hidden") + "</em>";
-            d.firstChild.textContent = r.name;
-            d.querySelector("b").dataset.w = String((r.size / max) * 100);
-            box.appendChild(d);
-          });
-          if (rows.length > 2) {
-            var more = document.createElement("div");
-            more.innerHTML = "<span>+ " + (rows.length - 2) + " smaller files</span><i></i><em></em>";
-            box.appendChild(more);
-          }
-          Array.prototype.forEach.call(box.children, function (d, i) {
-            at(120 + i * 110, function () {
-              d.classList.add("in");
-              var b = d.querySelector("b");
-              if (b) b.style.width = b.dataset.w + "%";
-            });
-          });
-        }
-        function resetMath() {
-          timers.forEach(clearTimeout);
-          timers = [];
-          coef.forEach(function (c) {
-            c.style.width = "0";
-          });
-          bandEls.forEach(function (b) {
-            b.classList.remove("hit");
-          });
-          pin.classList.remove("on");
-          pin.style.left = "0";
-          $("m-files").innerHTML = "";
-          ["m-bytes", "m-energy", "m-grams", "m-band"].forEach(function (id) {
-            $(id).textContent = "–";
-          });
-        }
         function play() {
           var r = result;
-          if (!r) return;
-          resetMath();
-          meter.classList.remove("waiting");
-          meter.classList.add("playing");
-          replay.hidden = true;
           var g = grams(r.bytes);
-          $("m-bytes-s").textContent = r.bytesNote;
-          on(0);
-          paintFiles(r.cutoff);
+          meter.classList.remove("waiting");
           count($("m-bytes"), r.bytes, 900, kb);
-          at(1200, function () {
-            on(1);
-            coef.forEach(function (c, i) {
-              at(i * 110, function () {
-                c.style.width = c.dataset.w + "%";
-              });
-            });
-            count($("m-energy"), (r.bytes / 1e9) * KWH_PER_GB * 1000, 800, function (v) {
-              return sig(v, 3) + " Wh";
-            });
-          });
-          at(2300, function () {
-            on(2);
+          setTimeout(function () {
             count($("m-grams"), g, 800, function (v) {
-              return (r.lower ? "≥ " : "") + sig(v, 3) + " g";
+              return (r.lower ? "≥ " : "") + sig(v, 2) + " g";
             });
-          });
-          at(3300, function () {
-            on(3);
+          }, reduce ? 0 : 700);
+          setTimeout(function () {
             if (r.lower) {
-              $("m-band").textContent = "withheld";
-              $("m-band-s").textContent = "No letter from a partial count";
+              $("m-band").textContent = "N/D";
+              $("m-band-s").textContent = "no grade from a partial count";
             } else {
-              var i = band(g);
-              $("m-band").textContent = BANDS[i][1];
-              $("m-band-s").textContent = "Fixed bands per page load";
-              pin.textContent = sig(g, 2) + " g";
-              pin.classList.add("on");
-              pin.style.left = bandPos(g) * 100 + "%";
-              at(500, function () {
-                bandEls[i].classList.add("hit");
-              });
+              $("m-band").textContent = BANDS[band(g)][1];
             }
-          });
-          at(4300, function () {
-            meter.classList.remove("playing");
-            replay.hidden = reduce;
-          });
+          }, reduce ? 0 : 1500);
         }
         function fromDetail(d, isError) {
           var bytes = d && typeof d.modelledResourceBytes === "number" ? d.modelledResourceBytes : 0;
-          var lower =
-            isError || !d || d.co2Grams === null || d.co2Grams === undefined || !d.score;
-          var cached = d && d.measurementScope === "document-observed-resource-sizes";
-          var visible = d && typeof d.measuredResourceCount === "number" ? d.measuredResourceCount : 0;
-          var hidden = d && typeof d.unknownResourceCount === "number" ? d.unknownResourceCount : 0;
-          return {
-            bytes: bytes,
-            lower: lower,
-            cutoff: d && d.measurementWindowEndMs,
-            bytesNote:
-              (cached ? "Resource sizes, some served from cache · " : "") +
-              visible +
-              " of " +
-              (visible + hidden) +
-              " sizes visible",
-          };
+          var lower = isError || !d || d.co2Grams === null || d.co2Grams === undefined || !d.score;
+          return { bytes: bytes, lower: lower };
         }
         function handle(d, isError) {
-          if (result) return; /* the badge measures once; restyling does not remeasure */
+          if (result) return; /* the badge measures once */
           var r = fromDetail(d, isError);
           if (isError && (!r.bytes || (d && d.reasonCode !== "unobservable-resource"))) {
             meter.classList.remove("waiting");
-            $("m-bytes-s").textContent = "No complete measurement on this load";
-            $("m-note").textContent =
-              "The badge withheld its estimate on this load" +
-              (d && d.reason ? ": " + d.reason : ".") +
-              " That is the fail-closed behaviour described below.";
+            $("m-band").textContent = "N/D";
+            $("m-note").textContent = "The badge withheld its estimate on this load, as it does when data is missing.";
             return;
           }
           result = r;
           if (r.lower) {
-            $("m-note").textContent =
-              "Some files on this load hid their size, so the badge shows a floor and no letter.";
+            $("m-note").textContent = "Some files on this load hid their size, so the badge shows a floor and no grade.";
           }
           play();
         }
@@ -3673,25 +3384,6 @@ import '@cometweb/carbon-badge/embed';</div>
         });
         badge.addEventListener("cometweb:badge-error", function (e) {
           handle(e.detail, true);
-        });
-        replay.addEventListener("click", play);
-
-        /* variant and theme controls only change attributes: no new measurement */
-        Array.prototype.forEach.call(meter.querySelectorAll(".seg button"), function (btn) {
-          btn.addEventListener("click", function () {
-            var group = btn.parentElement;
-            Array.prototype.forEach.call(group.children, function (b) {
-              b.setAttribute("aria-pressed", b === btn ? "true" : "false");
-            });
-            if (btn.dataset.variant) {
-              if (btn.dataset.variant === "default") badge.removeAttribute("variant");
-              else badge.setAttribute("variant", btn.dataset.variant);
-            }
-            if (btn.dataset.theme) {
-              badge.setAttribute("theme", btn.dataset.theme);
-              stage.classList.toggle("light", btn.dataset.theme === "light");
-            }
-          });
         });
 
         /* ---------- calculator ---------- */
