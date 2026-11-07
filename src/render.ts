@@ -226,9 +226,16 @@ export function mountUnknown(
     const language = options.language ?? 'en';
     clearRoot(root, options);
     // Hidden third-party sizes still leave an honest floor from visible resources.
+    // Round it down: a floor must never read higher than what was measured.
+    // Small floors get extra digits instead of being lifted to 0.01; toPrecision
+    // drops binary noise first so 0.29 does not floor to 0.28.
     const low = options.data?.co2LowerBoundGrams;
-    const floor = options.data?.reasonCode === 'unobservable-resource' && low && low > 0
-        ? `${translate('At least', language)} ${Math.max(low, 0.01).toFixed(2)} g CO₂e` : '';
+    let digits = 2, units = 0;
+    if (low && low > 0) while (!(units = Math.floor(Number((low * 10 ** digits).toPrecision(12)))) && digits < 6) digits++;
+    const floor = options.data?.reasonCode === 'unobservable-resource' && units > 0
+        ? `${translate('At least', language)} ${new Intl.NumberFormat(language, {
+            minimumFractionDigits: digits, maximumFractionDigits: digits, useGrouping: false,
+        }).format(units / 10 ** digits)} g CO₂e` : '';
     const subject = translate(measuredSubject(options.data?.url || ''), language);
     const status = element('div', {
         role: 'status',
