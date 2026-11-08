@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The "At least X g CO₂e" floor now rounds down, so it never reads higher than the visible resources measured. Floors under 0.01 g get extra digits (up to six) instead of being lifted to 0.01.
+- The floor number follows the badge locale, so `lang="pl"` shows a decimal comma.
+
 ## 2.0.6 — 2026-10-31
 
 The v2.0.5 tag was not published to npm because the release integration test still expected the previous cometweb.io page. Its changes ship in 2.0.6.

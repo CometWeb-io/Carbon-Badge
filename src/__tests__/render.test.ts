@@ -41,6 +41,52 @@ describe('badge render model', () => {
         expect(host.querySelector('.cw-subtitle')?.innerHTML).toBe('&lt;reason&gt;');
     });
 
+    describe('lower bound for hidden resource sizes', () => {
+        const floorData = (co2LowerBoundGrams: number): BadgeData => ({
+            ...readyData,
+            co2Grams: null,
+            score: null,
+            status: 'partial',
+            reasonCode: 'unobservable-resource',
+            co2LowerBoundGrams,
+        });
+        const mountFloor = (grams: number, language: 'en' | 'pl') => {
+            const host = document.createElement('div');
+            mountUnknown(host, 'Hidden sizes. Enable Timing-Allow-Origin or use Light.', {
+                data: floorData(grams),
+                language,
+            });
+            return host;
+        };
+
+        it('rounds the floor down so it never exceeds the measured value', () => {
+            const host = mountFloor(1.239, 'en');
+            expect(host.querySelector('.cw-title')?.textContent).toBe('At least 1.23 g CO₂e');
+            expect(host.querySelector('[role="status"]')?.getAttribute('aria-label'))
+                .toBe('example.com: At least 1.23 g CO₂e');
+            // Binary floating point must not push an exact value one step down.
+            expect(mountFloor(0.29, 'en').querySelector('.cw-title')?.textContent)
+                .toBe('At least 0.29 g CO₂e');
+        });
+
+        it('uses the Polish decimal comma for lang="pl"', () => {
+            const host = mountFloor(1.239, 'pl');
+            expect(host.querySelector('.cw-title')?.textContent).toBe('Co najmniej 1,23 g CO₂e');
+            expect(host.querySelector('[role="status"]')?.getAttribute('aria-label'))
+                .toContain('Co najmniej 1,23 g CO₂e');
+        });
+
+        it('adds digits for small floors instead of lifting them to 0.01', () => {
+            expect(mountFloor(0.004_49, 'en').querySelector('.cw-title')?.textContent)
+                .toBe('At least 0.004 g CO₂e');
+            expect(mountFloor(0.004_49, 'pl').querySelector('.cw-title')?.textContent)
+                .toBe('Co najmniej 0,004 g CO₂e');
+            const tiny = mountFloor(0.000_000_4, 'en');
+            expect(tiny.querySelector('.cw-grade')?.textContent).toBe('N/D');
+            expect(tiny.textContent).not.toContain('At least');
+        });
+    });
+
     it('binds evidence URL to the snapshot publicId', () => {
         expect(
             trustedEvidenceUrl(
