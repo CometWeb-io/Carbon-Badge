@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.7 — 2026-11-08
 
 - The "At least X g CO₂e" floor now rounds down, so it never reads higher than the visible resources measured. Floors under 0.01 g get extra digits (up to six) instead of being lifted to 0.01.
 - The floor number follows the badge locale, so `lang="pl"` shows a decimal comma.
