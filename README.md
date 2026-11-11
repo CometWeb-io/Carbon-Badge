@@ -5,7 +5,7 @@ Web component that shows estimated **CO₂e for a first document load**, its sou
 ![A page or API result becomes a carbon estimate with its method and status; missing data stays N/D.](docs/media/overview.svg)
 
 [![MIT](https://img.shields.io/badge/license-MIT-034C32)](LICENSE)
-[![Website](https://img.shields.io/badge/website-cometweb--io.github.io%2FCarbon--Badge-05F29B)](https://cometweb-io.github.io/Carbon-Badge/)
+[![Website](https://img.shields.io/badge/website-carbon--badge.cometweb.io-05F29B)](https://carbon-badge.cometweb.io/)
 
 The badge uses [CometWeb](https://cometweb.io) and documents a **SWDM v4 first-load lite approximation**. It is not a full visitor/cache model, an ESG certificate or a claim of a web-wide percentile. Product page: [cometweb.io/carbon-badge](https://cometweb.io/carbon-badge).
 
