@@ -8,7 +8,7 @@
       name="description"
       content="Open-source web component that estimates grams of CO₂e for a page load in the visitor's browser with the Sustainable Web Design Model v4, and shows N/D instead of guessing."
     />
-    <link rel="canonical" href="https://cometweb-io.github.io/Carbon-Badge/" />
+    <link rel="canonical" href="https://carbon-badge.cometweb.io/" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Carbon Badge — show the carbon cost of every page" />
@@ -16,8 +16,8 @@
       property="og:description"
       content="A web component that turns the bytes a page transferred into grams of CO₂e, in the visitor's browser. MIT-licensed."
     />
-    <meta property="og:url" content="https://cometweb-io.github.io/Carbon-Badge/" />
-    <meta property="og:image" content="https://cometweb-io.github.io/Carbon-Badge/og.jpg" />
+    <meta property="og:url" content="https://carbon-badge.cometweb.io/" />
+    <meta property="og:image" content="https://carbon-badge.cometweb.io/og.jpg" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#000000" />
     <link
@@ -2550,7 +2550,7 @@
 
     <div class="announce">
       <span class="label">Release</span>
-      <span>Carbon Badge 2.0.6 shows a lower bound when third-party sizes are hidden</span>
+      <span>Carbon Badge 2.0.7: the lower bound now rounds down and follows the badge language</span>
       <a class="more" href="https://github.com/CometWeb-io/Carbon-Badge/blob/main/CHANGELOG.md"
         >Changelog ↗</a
       >
@@ -2590,7 +2590,7 @@
       <div class="hero" id="top">
         <div class="wrap">
           <div class="hero-copy">
-            <div class="eyebrow hero-eyebrow">Open source · MIT · v2.0.6</div>
+            <div class="eyebrow hero-eyebrow">Open source · MIT · v2.0.7</div>
             <h1>Show the carbon cost of every page</h1>
             <p class="sub">
               <b>Paste one tag into your footer.</b> The badge measures what each page actually loaded in the
@@ -3056,11 +3056,11 @@ data_GB = bytes / 1,000,000,000</pre
               <p>Put it where the badge should appear, usually the footer.</p>
               <div class="code"><i>&lt;script type="module"</i>
   src="https://cdn.jsdelivr.net/npm/
-  @cometweb/carbon-badge@2.0.6/dist/
+  @cometweb/carbon-badge@2.0.7/dist/
   cometweb-carbon-badge.esm.js"
-  integrity="sha384-N55q73xI0VL1Hp6MQp5W
-  SFoVwZUDUdfN5JsQvjhkzU9VLHguRtdTculN
-  BP7uvm8l"
+  integrity="sha384-5bPSZPDLIucHdDGUKNmj
+  LyfW/G6WfaEuJwSQ3Pn2NpMCb0oyonTqY4YN
+  1wfqNiBN"
   crossorigin="anonymous"<i>&gt;&lt;/script&gt;</i>
 <b>&lt;cometweb-carbon-badge</b>
   theme="light" mode="estimate"<b>&gt;</b>
@@ -3097,7 +3097,7 @@ import '@cometweb/carbon-badge/embed';</div>
             </div>
           </div>
           <p class="note reveal">
-            The hash above matches the 2.0.6 file on jsDelivr and on cometweb.io, checked on 7 Nov
+            The hash above matches the 2.0.7 file on jsDelivr and on cometweb.io, checked on 11 Nov
             2026. WordPress, Shopify, Webflow and Wix steps and self-hosting are in the README.
           </p>
           <div class="install-ctas reveal">
@@ -3193,10 +3193,10 @@ import '@cometweb/carbon-badge/embed';</div>
             </div>
           </div>
           <div class="timeline reveal" aria-label="Release history">
-            <div><b>1.0.0</b>10 Feb 2026 · first npm release</div>
             <div><b>1.0.10</b>30 Sep 2026 · fail-closed honesty</div>
             <div><b>2.0.2</b>9 Oct 2026 · local by default</div>
-            <div class="now"><b>2.0.6</b>31 Oct 2026 · lower bound</div>
+            <div><b>2.0.6</b>31 Oct 2026 · lower bound</div>
+            <div class="now"><b>2.0.7</b>11 Nov 2026 · floor rounds down</div>
           </div>
           <div class="badges reveal">
             <a href="https://github.com/CometWeb-io/Carbon-Badge/actions/workflows/ci.yml"
@@ -3304,9 +3304,9 @@ import '@cometweb/carbon-badge/embed';</div>
       <div class="wrap">
         <h2 id="family-h">More open source from CometWeb</h2>
         <div class="family-links">
-          <a href="https://cometweb-io.github.io/rankproof/"><b>RankProof</b><span>Check that backlinks still exist</span></a>
-          <a href="https://cometweb-io.github.io/whykit/"><b>WhyKit</b><span>Decision memory for agents</span></a>
-          <a href="https://cometweb-io.github.io/agent-skills/"><b>Agent Skills</b><span>Skills for coding agents</span></a>
+          <a href="https://rankproof.cometweb.io/"><b>RankProof</b><span>Check that backlinks still exist</span></a>
+          <a href="https://whykit.cometweb.io/"><b>WhyKit</b><span>Decision memory for agents</span></a>
+          <a href="https://agent-skills.cometweb.io/"><b>Agent Skills</b><span>Skills for coding agents</span></a>
           <a href="https://cometweb.io/open-source"><b>All projects</b><span>on cometweb.io</span></a>
         </div>
       </div>
@@ -3384,7 +3384,7 @@ import '@cometweb/carbon-badge/embed';</div>
           copy(this, $("cmd-text").textContent.trim());
         });
         var SNIPPET =
-          '<script type="module"\n  src="https://cdn.jsdelivr.net/npm/@cometweb/carbon-badge@2.0.6/dist/cometweb-carbon-badge.esm.js"\n  integrity="sha384-N55q73xI0VL1Hp6MQp5WSFoVwZUDUdfN5JsQvjhkzU9VLHguRtdTculNBP7uvm8l"\n  crossorigin="anonymous"></scr' +
+          '<script type="module"\n  src="https://cdn.jsdelivr.net/npm/@cometweb/carbon-badge@2.0.7/dist/cometweb-carbon-badge.esm.js"\n  integrity="sha384-5bPSZPDLIucHdDGUKNmjLyfW/G6WfaEuJwSQ3Pn2NpMCb0oyonTqY4YN1wfqNiBN"\n  crossorigin="anonymous"></scr' +
           'ipt>\n<cometweb-carbon-badge theme="light" mode="estimate"></cometweb-carbon-badge>';
         $("copy-snippet").addEventListener("click", function () {
           copy(this, SNIPPET);
