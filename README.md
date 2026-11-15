@@ -1,13 +1,13 @@
 # CometWeb Carbon Badge
 
-Web component that shows estimated **CO₂e for a first document load**, its source and measurement status. It has zero runtime dependencies, light/dark themes and three visual variants. The lightweight embed has a **10,700 B gzip initial-load CI budget**; the full SDK retains a **14,000 B** budget.
+**A carbon estimate for every page.** Carbon Badge is a small badge for your site's footer that estimates the CO₂e of each page load from what the visitor's browser downloaded, and shows how it got the number. It's an estimate based on the Sustainable Web Design Model and doesn't certify anything.
 
 ![A page or API result becomes a carbon estimate with its method and status; missing data stays N/D.](docs/media/overview.svg)
 
 [![MIT](https://img.shields.io/badge/license-MIT-034C32)](LICENSE)
 [![Website](https://img.shields.io/badge/website-carbon--badge.cometweb.io-05F29B)](https://carbon-badge.cometweb.io/)
 
-The badge uses [CometWeb](https://cometweb.io) and documents a **SWDM v4 first-load lite approximation**. It is not a full visitor/cache model, an ESG certificate or a claim of a web-wide percentile. Product page: [cometweb.io/carbon-badge](https://cometweb.io/carbon-badge).
+It is a web component with zero runtime dependencies, light and dark themes and three visual variants. The lightweight embed has a **10,700 B gzip initial-load CI budget**; the full SDK retains a **14,000 B** budget. The badge documents a **SWDM v4 first-load lite approximation** for a first document load: it is not a full visitor/cache model, an ESG certificate or a claim of a web-wide percentile. Product page: [cometweb.io/carbon-badge](https://cometweb.io/carbon-badge).
 
 ## Add it in one minute
 
